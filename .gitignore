@@ -1,0 +1,10 @@
+node_modules/
+.next/
+out/
+storybook-static/
+playwright-report/
+test-results/
+.env*
+!.env.example
+pnpm-debug.log*
+*.tsbuildinfo
