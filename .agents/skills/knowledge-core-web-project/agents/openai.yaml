@@ -1,0 +1,4 @@
+interface:
+  display_name: "Knowledge-Core-Web Project Guide"
+  short_description: "Verified project-specific engineering guidance"
+  default_prompt: "Use $knowledge-core-web-project to apply this repository's verified engineering constraints."

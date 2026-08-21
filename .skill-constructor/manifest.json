@@ -1,0 +1,394 @@
+{
+  "createdAt": "2026-08-21T15:20:11Z",
+  "facts": [
+    {
+      "id": "architecture.modules",
+      "revision": 2,
+      "section": "architecture",
+      "sources": [
+        {
+          "detail": "evidence-sha256:34ef353287a835a155bc67c997cc9fa26047405b914e40c0e454ea1934b634eb",
+          "kind": "detected",
+          "reference": "filesystem:top-level-directories"
+        },
+        {
+          "kind": "user",
+          "reference": "user-confirmed"
+        }
+      ],
+      "status": "verified",
+      "updatedAt": "2026-08-21T15:22:58Z",
+      "value": "src owns application code; deploy owns Kubernetes deployment; docker owns image definitions; scripts owns automation and smoke checks; e2e owns end-to-end tests; docs owns documentation; storybook-static and test-results are generated outputs."
+    },
+    {
+      "id": "architecture.summary",
+      "revision": 2,
+      "section": "architecture",
+      "sources": [
+        {
+          "kind": "user",
+          "reference": "user-confirmed"
+        }
+      ],
+      "status": "verified",
+      "updatedAt": "2026-08-21T15:22:58Z",
+      "value": "Next.js App Router Web/BFF. Browsers access Web; Web route handlers proxy to Gateway. Web does not directly access databases or Redis."
+    },
+    {
+      "id": "boundaries.repository",
+      "revision": 1,
+      "section": "environment",
+      "sources": [
+        {
+          "kind": "detected",
+          "reference": "filesystem:repository-boundary"
+        }
+      ],
+      "status": "verified",
+      "updatedAt": "2026-08-21T15:20:11Z",
+      "value": {
+        "kind": "git",
+        "nestedRepositories": [],
+        "root": "."
+      }
+    },
+    {
+      "id": "cicd.config-files",
+      "revision": 1,
+      "section": "workflows",
+      "sources": [
+        {
+          "kind": "detected",
+          "reference": "filesystem:ci-config"
+        }
+      ],
+      "status": "verified",
+      "updatedAt": "2026-08-21T15:20:11Z",
+      "value": [
+        ".github/workflows/ci.yml",
+        ".github/workflows/pipeline.yml"
+      ]
+    },
+    {
+      "id": "cicd.pipeline",
+      "revision": 2,
+      "section": "workflows",
+      "sources": [
+        {
+          "kind": "user",
+          "reference": "user-confirmed"
+        }
+      ],
+      "status": "verified",
+      "updatedAt": "2026-08-21T15:22:58Z",
+      "value": "PR, main, and dev run verification. Pushes to dev build immutable Harbor images, update GitOps, sync Argo dev, run smoke checks, then promote by fast-forwarding main and releasing. Failures support rollback."
+    },
+    {
+      "id": "constraints.project",
+      "revision": 2,
+      "section": "constraints",
+      "sources": [
+        {
+          "kind": "user",
+          "reference": "user-confirmed"
+        }
+      ],
+      "status": "verified",
+      "updatedAt": "2026-08-21T15:22:58Z",
+      "value": "Web does not directly own backend data access; images use immutable digests; no plaintext secrets or force pushes; Gateway routes and network policies are owned by k3s configuration."
+    },
+    {
+      "id": "conventions.code-style",
+      "revision": 2,
+      "section": "conventions",
+      "sources": [
+        {
+          "kind": "user",
+          "reference": "user-confirmed"
+        }
+      ],
+      "status": "verified",
+      "updatedAt": "2026-08-21T15:22:58Z",
+      "value": "Use strict TypeScript and ESLint; validate with Vitest, Playwright, build, and Storybook. Keep Gateway access server-side and never expose tokens to clients."
+    },
+    {
+      "id": "entrypoints.catalog",
+      "revision": 2,
+      "section": "services",
+      "sources": [
+        {
+          "kind": "user",
+          "reference": "user-confirmed"
+        }
+      ],
+      "status": "verified",
+      "updatedAt": "2026-08-21T15:22:58Z",
+      "value": "Development: pnpm dev. Production: .next/standalone/server.js. Health: /api/health. Smoke: scripts/smoke.sh. Kubernetes deployment: deploy/web/overlay/dev."
+    },
+    {
+      "id": "environment.setup",
+      "revision": 2,
+      "section": "environment",
+      "sources": [
+        {
+          "kind": "user",
+          "reference": "user-confirmed"
+        }
+      ],
+      "status": "verified",
+      "updatedAt": "2026-08-21T15:22:58Z",
+      "value": "Node.js 24.18.1 and pnpm 10.31.0; use pnpm install --frozen-lockfile. Runtime requires non-secret KNOWLEDGE_CORE_GATEWAY_URL; secrets are injected externally."
+    },
+    {
+      "id": "environment.toolchains",
+      "revision": 3,
+      "section": "environment",
+      "sources": [
+        {
+          "kind": "detected",
+          "reference": "detected:toolchain-manifests"
+        }
+      ],
+      "status": "verified",
+      "updatedAt": "2026-08-21T15:27:47Z",
+      "value": [
+        {
+          "manifest": ".next/package.json",
+          "toolchain": "node"
+        },
+        {
+          "manifest": ".next/standalone/.next/package.json",
+          "toolchain": "node"
+        },
+        {
+          "manifest": ".next/standalone/package.json",
+          "toolchain": "node"
+        },
+        {
+          "manifest": "package.json",
+          "toolchain": "node"
+        }
+      ]
+    },
+    {
+      "id": "identity.project-name",
+      "revision": 1,
+      "section": "environment",
+      "sources": [
+        {
+          "kind": "detected",
+          "reference": "filesystem:project-root"
+        }
+      ],
+      "status": "verified",
+      "updatedAt": "2026-08-21T15:20:11Z",
+      "value": "Knowledge-Core-Web"
+    },
+    {
+      "id": "security.secrets-and-config",
+      "revision": 2,
+      "section": "conventions",
+      "sources": [
+        {
+          "kind": "user",
+          "reference": "user-confirmed"
+        }
+      ],
+      "status": "verified",
+      "updatedAt": "2026-08-21T15:22:58Z",
+      "value": "Inject secrets through GitHub or Kubernetes Secrets only; do not commit plaintext secrets. Authentication cookies are HttpOnly, Secure, and use appropriate SameSite; logs must not contain tokens or sensitive data."
+    },
+    {
+      "id": "services.catalog",
+      "revision": 2,
+      "section": "services",
+      "sources": [
+        {
+          "kind": "user",
+          "reference": "user-confirmed"
+        }
+      ],
+      "status": "verified",
+      "updatedAt": "2026-08-21T15:22:58Z",
+      "value": "The web service is a Next.js server/BFF listening on port 3000 and depends on knowledge-core-gateway."
+    },
+    {
+      "id": "validation.definition-of-done",
+      "revision": 2,
+      "section": "workflows",
+      "sources": [
+        {
+          "kind": "user",
+          "reference": "user-confirmed"
+        }
+      ],
+      "status": "verified",
+      "updatedAt": "2026-08-21T15:22:58Z",
+      "value": "Lint, typecheck, unit tests, production build, e2e, Storybook, Docker build, Kustomize render and server dry-run, Argo sync, and deployment smoke checks pass."
+    },
+    {
+      "id": "workflows.build",
+      "revision": 1,
+      "section": "workflows",
+      "sources": [
+        {
+          "kind": "detected",
+          "reference": "detected:project-scripts"
+        }
+      ],
+      "status": "verified",
+      "updatedAt": "2026-08-21T15:20:11Z",
+      "value": {
+        "npm:build": {
+          "command": "next build",
+          "source": ".next/standalone/package.json"
+        },
+        "npm:build-storybook": {
+          "command": "storybook build",
+          "source": ".next/standalone/package.json"
+        }
+      }
+    },
+    {
+      "id": "workflows.development",
+      "revision": 1,
+      "section": "workflows",
+      "sources": [
+        {
+          "kind": "detected",
+          "reference": "detected:project-scripts"
+        }
+      ],
+      "status": "verified",
+      "updatedAt": "2026-08-21T15:20:11Z",
+      "value": {
+        "npm:dev": {
+          "command": "next dev",
+          "source": ".next/standalone/package.json"
+        },
+        "npm:start": {
+          "command": "next start",
+          "source": ".next/standalone/package.json"
+        }
+      }
+    },
+    {
+      "id": "workflows.quality",
+      "revision": 1,
+      "section": "workflows",
+      "sources": [
+        {
+          "kind": "detected",
+          "reference": "detected:project-scripts"
+        }
+      ],
+      "status": "verified",
+      "updatedAt": "2026-08-21T15:20:11Z",
+      "value": {
+        "npm:lint": {
+          "command": "eslint .",
+          "source": ".next/standalone/package.json"
+        },
+        "npm:typecheck": {
+          "command": "tsc --noEmit",
+          "source": ".next/standalone/package.json"
+        }
+      }
+    },
+    {
+      "id": "workflows.scripts",
+      "revision": 1,
+      "section": "workflows",
+      "sources": [
+        {
+          "kind": "detected",
+          "reference": "detected:project-scripts"
+        }
+      ],
+      "status": "verified",
+      "updatedAt": "2026-08-21T15:20:11Z",
+      "value": {
+        "npm:build": {
+          "command": "next build",
+          "source": ".next/standalone/package.json"
+        },
+        "npm:build-storybook": {
+          "command": "storybook build",
+          "source": ".next/standalone/package.json"
+        },
+        "npm:dev": {
+          "command": "next dev",
+          "source": ".next/standalone/package.json"
+        },
+        "npm:e2e": {
+          "command": "playwright test",
+          "source": ".next/standalone/package.json"
+        },
+        "npm:lint": {
+          "command": "eslint .",
+          "source": ".next/standalone/package.json"
+        },
+        "npm:start": {
+          "command": "next start",
+          "source": ".next/standalone/package.json"
+        },
+        "npm:storybook": {
+          "command": "storybook dev -p 6006",
+          "source": ".next/standalone/package.json"
+        },
+        "npm:test": {
+          "command": "vitest run",
+          "source": ".next/standalone/package.json"
+        },
+        "npm:test:watch": {
+          "command": "vitest",
+          "source": ".next/standalone/package.json"
+        },
+        "npm:typecheck": {
+          "command": "tsc --noEmit",
+          "source": ".next/standalone/package.json"
+        }
+      }
+    },
+    {
+      "id": "workflows.test",
+      "revision": 1,
+      "section": "workflows",
+      "sources": [
+        {
+          "kind": "detected",
+          "reference": "detected:project-scripts"
+        }
+      ],
+      "status": "verified",
+      "updatedAt": "2026-08-21T15:20:11Z",
+      "value": {
+        "npm:test": {
+          "command": "vitest run",
+          "source": ".next/standalone/package.json"
+        },
+        "npm:test:watch": {
+          "command": "vitest",
+          "source": ".next/standalone/package.json"
+        }
+      }
+    }
+  ],
+  "generator": {
+    "name": "skill-constructor",
+    "version": "0.4.3"
+  },
+  "project": {
+    "language": "en",
+    "name": "Knowledge-Core-Web",
+    "profile": "generic",
+    "slug": "knowledge-core-web"
+  },
+  "revision": 3,
+  "scan": {
+    "fingerprint": "ab5a741c1f8e4e223e089cd11c167aeac394b99897e828b864ac246d34c21a5d",
+    "inventoryCount": 825
+  },
+  "schemaVersion": 1,
+  "updatedAt": "2026-08-21T15:27:47Z"
+}

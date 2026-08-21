@@ -20,7 +20,11 @@ pnpm lint
 pnpm typecheck
 pnpm test
 pnpm build
+pnpm e2e
+pnpm build-storybook
 ```
+
+生产镜像使用 Next.js standalone server 构建；运行时通过 `KNOWLEDGE_CORE_GATEWAY_URL` 访问集群内 Gateway。`dev` 分支发布会在质量门禁、Argo CD 健康检查和部署 Smoke 通过后，fast-forward 推送到 `main` 并创建版本 Release。
 
 ## 边界约定
 

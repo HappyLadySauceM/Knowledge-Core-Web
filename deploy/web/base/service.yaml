@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: knowledge-core-web
+  labels:
+    app.kubernetes.io/name: knowledge-core-web
+    app.kubernetes.io/component: web
+    app.kubernetes.io/part-of: knowledge-core
+spec:
+  selector:
+    app.kubernetes.io/name: knowledge-core-web
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http

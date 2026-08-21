@@ -48,7 +48,16 @@ pnpm lint
 pnpm typecheck
 pnpm test
 pnpm build
+pnpm e2e
 pnpm build-storybook
 ```
+
+## 运行与发布
+
+- Next.js 使用 standalone 输出，由 Node 24 生产镜像运行在 3000 端口。
+- `/api/health` 是只检查 Web 进程的健康入口；Gateway 依赖通过部署 Smoke 单独验证。
+- `KNOWLEDGE_CORE_GATEWAY_URL` 仅作为服务端运行时配置注入，不进入浏览器 bundle。
+- `dev` 发布构建 immutable Harbor candidate digest，GitOps 更新后等待 `knowledge-core-web-dev` Argo Application 健康，再执行 Web、Gateway 直连和 BFF Smoke。
+- Smoke 和 DeepSeek 发布摘要通过后，流水线仅 fast-forward 推送 `main`，并创建同一 SHA 的版本 Tag 与 GitHub Release；冲突或分叉时禁止强推。
 
 关键流程补齐后增加 Playwright：注册/验证、登录/刷新、创建文档、发布、协作连接、AI 问答和举报审核。

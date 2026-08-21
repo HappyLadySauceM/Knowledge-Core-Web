@@ -67,3 +67,18 @@ Knowledge-Core-Web: pnpm test 通过（1 test file / 1 test）
 Knowledge-Core-Web: pnpm build 通过
 Knowledge-Core-Web: pnpm build-storybook 通过
 ```
+
+## 2026-08-21：Web CI/CD 与集群入口
+
+### 已完成
+
+- Next.js standalone 运行输出、`/api/health` 健康入口和非 root 生产容器。
+- Kubernetes Deployment/Service、Harbor digest 镜像组件和 `knowledge-core-web-dev` Argo Application。
+- `dev` 分支候选镜像、GitOps 快照、Argo 健康、部署 Smoke、DeepSeek 摘要、fast-forward `main` 和版本 Release 流水线。
+- `knowledge-core.happyladysauce.local` 首页切换 Web；`/api/v1/*` 保留直达 Gateway，协作 WebSocket 路径保持不变。
+
+### 待完成
+
+- 首次将 Web 镜像预热并发布到 development 集群。
+- 验证 Higress 对 `/api/v1/*`、BFF 和首页的线上路径优先级。
+- 随业务 API 增加认证登录、文档编辑和协作 Playwright 用户路径。
