@@ -211,6 +211,9 @@ jobs:
   deploy-release:
     needs: [plan, release-preflight, web-verify-build, release-notes, package-candidates]
     if: needs.package-candidates.result == 'success' && needs.release-notes.result == 'success'
+    permissions:
+      contents: write
+      statuses: write
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 45
     environment: release
@@ -225,11 +228,10 @@ jobs:
           client-id: ${{ secrets.GH_APP_ID }}
           private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
           owner: HappyLadySauceM
-          repositories: Knowledge-Core-Web,k3s-home-deploy
+          repositories: k3s-home-deploy
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          token: ${{ steps.app-token.outputs.token }}
       - name: Prepare deployment credentials and verify Argo bootstrap
         env:
           HARBOR_DOCKER_CONFIG_JSON: ${{ secrets.HARBOR_DOCKER_CONFIG_JSON }}
@@ -267,7 +269,7 @@ jobs:
           echo "GITOPS_BASE_REVISION=$(jq -r '.gitops_base_revision' <<<"$result")" >> "$GITHUB_ENV"
       - name: Mark dev deployment pending
         env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           docker run --rm --network host -v "$GITHUB_WORKSPACE:/workspace" \
             -e CI_PROJECT_CONFIG_JSON -e GITHUB_TOKEN -w /workspace "$CI_IMAGE" status \
@@ -295,7 +297,7 @@ jobs:
           touch "$STATE_DIR/smoke.ok"
       - name: Mark dev smoke successful
         env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           docker run --rm --network host -v "$GITHUB_WORKSPACE:/workspace" \
             -e CI_PROJECT_CONFIG_JSON -e GITHUB_TOKEN -w /workspace "$CI_IMAGE" status \
@@ -303,7 +305,7 @@ jobs:
             --target-url "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
       - name: Promote candidate and publish main release
         env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           socket="${DOCKER_HOST:-unix:///var/run/docker.sock}"
@@ -332,7 +334,7 @@ jobs:
       - name: Mark dev deployment failed
         if: failure() && env.GITOPS_REVISION != ''
         env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           docker run --rm --network host -v "$GITHUB_WORKSPACE:/workspace" \
             -e CI_PROJECT_CONFIG_JSON -e GITHUB_TOKEN -w /workspace "$CI_IMAGE" status \
