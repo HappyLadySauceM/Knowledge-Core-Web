@@ -295,6 +295,17 @@ jobs:
       - name: Wait for Argo CD
         run: |
           set -euo pipefail
+          for attempt in 1 2 3 4 5 6; do
+            if docker run --rm --network host -v "$KUBECONFIG:/secrets/kubeconfig:ro" \
+              --entrypoint kubectl "$CI_IMAGE" --kubeconfig=/secrets/kubeconfig get --raw=/readyz >/dev/null; then
+              break
+            fi
+            if (( attempt == 6 )); then
+              echo "Kubernetes API remained unavailable from the release container." >&2
+              exit 1
+            fi
+            sleep "$((attempt * 2))"
+          done
           docker run --rm --network host -v "$GITHUB_WORKSPACE:/workspace" \
             -v "$KUBECONFIG:/secrets/kubeconfig:ro" \
             -e CI_PROJECT_CONFIG_JSON -e CI_GITOPS_IMAGE_OVERRIDES_JSON -e KUBECONFIG=/secrets/kubeconfig \
