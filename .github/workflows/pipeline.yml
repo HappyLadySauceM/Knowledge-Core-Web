@@ -267,9 +267,20 @@ jobs:
           GITOPS_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           set -euo pipefail
-          result="$(docker run --rm --network host -v "$GITHUB_WORKSPACE:/workspace" \
-            -e CI_PROJECT_CONFIG_JSON -e CI_GITOPS_IMAGE_OVERRIDES_JSON -e GITOPS_TOKEN \
-            -w /workspace "$CI_IMAGE" promote-snapshot --source-sha "$GITHUB_SHA")"
+          result=""
+          for attempt in 1 2 3; do
+            if result="$(docker run --rm --network host -v "$GITHUB_WORKSPACE:/workspace" \
+              -e CI_PROJECT_CONFIG_JSON -e CI_GITOPS_IMAGE_OVERRIDES_JSON -e GITOPS_TOKEN \
+              -w /workspace "$CI_IMAGE" promote-snapshot --source-sha "$GITHUB_SHA")"; then
+              break
+            fi
+            if (( attempt < 3 )); then
+              echo "GitOps promotion attempt $attempt failed; retrying." >&2
+              sleep "$((attempt * 5))"
+            fi
+          done
+          jq -e '.gitops_revision | strings | length == 40' <<<"$result" >/dev/null
+          jq -e '.gitops_base_revision | strings | length == 40' <<<"$result" >/dev/null
           echo "$result"
           echo "GITOPS_REVISION=$(jq -r '.gitops_revision' <<<"$result")" >> "$GITHUB_ENV"
           echo "GITOPS_BASE_REVISION=$(jq -r '.gitops_base_revision' <<<"$result")" >> "$GITHUB_ENV"
