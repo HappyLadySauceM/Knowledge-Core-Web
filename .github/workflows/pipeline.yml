@@ -82,7 +82,26 @@ jobs:
             printf '::error::Missing release inputs: %s\n' "${missing[*]}"
             exit 1
           fi
-          echo "All release inputs are present."
+          registry="harbor.happyladysauce.local"
+          expected_username='robot$knowledge-core+ci-push'
+          jq -e --arg registry "$registry" --arg username "$expected_username" \
+            '.auths[$registry].username == $username and
+             (.auths[$registry].password | type == "string" and length >= 8) and
+             (.auths[$registry].auth | type == "string" and length > 0)' \
+            <<<"$HARBOR_DOCKER_CONFIG_JSON" >/dev/null
+
+          preflight_dir="$RUNNER_TEMP/knowledge-core-web-preflight-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          install -d -m 0700 "$preflight_dir"
+          cleanup_preflight() {
+            shred -u "$preflight_dir/config.json" "$preflight_dir/ca.crt" 2>/dev/null || true
+            rmdir "$preflight_dir" 2>/dev/null || true
+          }
+          trap cleanup_preflight EXIT
+          printf '%s' "$HARBOR_DOCKER_CONFIG_JSON" > "$preflight_dir/config.json"
+          printf '%s' "$HARBOR_CA_PEM" > "$preflight_dir/ca.crt"
+          openssl x509 -in "$preflight_dir/ca.crt" -noout -checkend 0 >/dev/null
+          DOCKER_CONFIG="$preflight_dir" docker buildx imagetools inspect "$CI_IMAGE" >/dev/null
+          echo "Release inputs and Harbor publisher identity are valid."
 
   web-verify-build:
     needs: plan
@@ -144,14 +163,19 @@ jobs:
           test -s "$STATE_DIR/harbor/ca.crt"
           echo "DOCKER_CONFIG=$STATE_DIR/harbor" >> "$GITHUB_ENV"
           echo "HARBOR_CA_FILE=$STATE_DIR/harbor/ca.crt" >> "$GITHUB_ENV"
-      - name: Prewarm pinned Node base image
+      - name: Ensure pinned Node base image
         run: |
           set -euo pipefail
+          base_image="harbor.happyladysauce.local/knowledge-core/base/node:24.18.1-bookworm-slim@sha256:a09aabc645e86e81e23dab78e0c0f2eaa233cab4277c7188232181a1a8bd5d39"
+          if docker buildx imagetools inspect "$base_image" >/dev/null 2>&1; then
+            echo "Pinned Node base image already exists in Harbor."
+            exit 0
+          fi
           socket="${DOCKER_HOST:-unix:///var/run/docker.sock}"
           socket="${socket#unix://}"
           docker run --rm --network host \
             -v "$GITHUB_WORKSPACE:/workspace" -v "$socket:/var/run/docker.sock" \
-            -v "$DOCKER_CONFIG:/root/.docker" -v "$HARBOR_CA_FILE:/etc/harbor-ca/ca.crt:ro" \
+            -v "$DOCKER_CONFIG:/root/.docker:ro" -v "$HARBOR_CA_FILE:/etc/harbor-ca/ca.crt:ro" \
             -e CI_PROJECT_CONFIG_JSON -e DOCKER_HOST=unix:///var/run/docker.sock \
             -e DOCKER_CONFIG=/root/.docker -e CI_REGISTRY_CA_FILE=/etc/harbor-ca/ca.crt \
             -e SSL_CERT_FILE=/etc/harbor-ca/ca.crt -w /workspace "$CI_IMAGE" prewarm
@@ -174,6 +198,7 @@ jobs:
           echo "$result"
           digest="$(jq -r '.digest' <<<"$result")"
           [[ "$digest" == sha256:* ]]
+          [[ "$digest" != "sha256:0000000000000000000000000000000000000000000000000000000000000000" ]]
           jq -n --arg digest "$digest" \
             '{"knowledge-core-web":{"newName":"harbor.happyladysauce.local/knowledge-core/web","digest":$digest}}' \
             > "$STATE_DIR/overrides.json"
@@ -222,7 +247,6 @@ jobs:
           echo "HARBOR_CA_FILE=$STATE_DIR/harbor/ca.crt" >> "$GITHUB_ENV"
           echo "KUBECONFIG=$STATE_DIR/kubeconfig" >> "$GITHUB_ENV"
           git fetch origin main dev
-          kubectl get applicationset knowledge-core-web-dev -n argocd >/dev/null
           kubectl get application knowledge-core-web-dev -n argocd >/dev/null
       - name: Promote GitOps snapshot
         id: gitops
@@ -259,7 +283,11 @@ jobs:
           set -euo pipefail
           docker run --rm --network host --entrypoint /bin/bash \
             -v "$GITHUB_WORKSPACE:/workspace" -v "$KUBECONFIG:/secrets/kubeconfig:ro" \
-            -e KUBECONFIG=/secrets/kubeconfig -w /workspace "$CI_IMAGE" ./scripts/smoke.sh
+            -v "$HARBOR_CA_FILE:/etc/happyladysauce-ca/ca.crt:ro" \
+            -e KUBECONFIG=/secrets/kubeconfig \
+            -e PUBLIC_CA_FILE=/etc/happyladysauce-ca/ca.crt \
+            -e PUBLIC_GATEWAY_ADDRESS=127.0.0.1:30443 \
+            -w /workspace "$CI_IMAGE" ./scripts/smoke.sh
           touch "$STATE_DIR/smoke.ok"
       - name: Mark dev smoke successful
         env:
