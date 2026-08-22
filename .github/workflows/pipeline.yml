@@ -144,6 +144,17 @@ jobs:
           test -s "$STATE_DIR/harbor/ca.crt"
           echo "DOCKER_CONFIG=$STATE_DIR/harbor" >> "$GITHUB_ENV"
           echo "HARBOR_CA_FILE=$STATE_DIR/harbor/ca.crt" >> "$GITHUB_ENV"
+      - name: Prewarm pinned Node base image
+        run: |
+          set -euo pipefail
+          socket="${DOCKER_HOST:-unix:///var/run/docker.sock}"
+          socket="${socket#unix://}"
+          docker run --rm --network host \
+            -v "$GITHUB_WORKSPACE:/workspace" -v "$socket:/var/run/docker.sock" \
+            -v "$DOCKER_CONFIG:/root/.docker" -v "$HARBOR_CA_FILE:/etc/harbor-ca/ca.crt:ro" \
+            -e CI_PROJECT_CONFIG_JSON -e DOCKER_HOST=unix:///var/run/docker.sock \
+            -e DOCKER_CONFIG=/root/.docker -e CI_REGISTRY_CA_FILE=/etc/harbor-ca/ca.crt \
+            -e SSL_CERT_FILE=/etc/harbor-ca/ca.crt -w /workspace "$CI_IMAGE" prewarm
       - name: Build immutable candidate
         id: candidate
         env:
