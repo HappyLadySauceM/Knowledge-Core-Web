@@ -384,11 +384,11 @@
     "profile": "generic",
     "slug": "knowledge-core-web"
   },
-  "revision": 5,
+  "revision": 6,
   "scan": {
-    "fingerprint": "c10a4fea73b9f0be964db4dadcb8a4241138b7e53bc8284011e9e549c434a540",
+    "fingerprint": "29f1167cab49bf9f4241ca131ea3790f9e0e18616de5de1aabe1ae63fbaa2965",
     "inventoryCount": 839
   },
   "schemaVersion": 1,
-  "updatedAt": "2026-08-21T16:04:20Z"
+  "updatedAt": "2026-08-22T02:16:09Z"
 }
