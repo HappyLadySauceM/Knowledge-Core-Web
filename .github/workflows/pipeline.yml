@@ -237,6 +237,7 @@ jobs:
           HARBOR_DOCKER_CONFIG_JSON: ${{ secrets.HARBOR_DOCKER_CONFIG_JSON }}
           HARBOR_CA_PEM: ${{ secrets.HARBOR_CA_PEM }}
           K3S_RELEASE_KUBECONFIG: ${{ secrets.K3S_RELEASE_KUBECONFIG }}
+          K3S_RELEASE_API_SERVER: ${{ vars.K3S_RELEASE_API_SERVER }}
           WEB_IMAGE_DIGEST: ${{ needs.package-candidates.outputs.digest }}
           STATE_DIR: ${{ needs.plan.outputs.state_dir }}
         run: |
@@ -249,7 +250,17 @@ jobs:
           test -s "$STATE_DIR/harbor/config.json"
           test -s "$STATE_DIR/harbor/ca.crt"
           test -s "$STATE_DIR/kubeconfig"
+          [[ "$K3S_RELEASE_API_SERVER" == https://*:* ]]
           [[ "$WEB_IMAGE_DIGEST" == sha256:* ]]
+          kube_context="$(kubectl --kubeconfig="$STATE_DIR/kubeconfig" config current-context)"
+          kube_cluster="$(kubectl --kubeconfig="$STATE_DIR/kubeconfig" config view -o json | \
+            jq -r --arg context "$kube_context" '.contexts[] | select(.name == $context) | .context.cluster')"
+          test -n "$kube_cluster"
+          kubectl --kubeconfig="$STATE_DIR/kubeconfig" config set-cluster "$kube_cluster" \
+            --server="$K3S_RELEASE_API_SERVER" >/dev/null
+          release_host="${K3S_RELEASE_API_SERVER#https://}"
+          release_host="${release_host%:*}"
+          test -n "$release_host"
           jq -cn --arg digest "$WEB_IMAGE_DIGEST" \
             '{"knowledge-core-web":{"newName":"harbor.happyladysauce.local/knowledge-core/web","digest":$digest}}' \
             > "$STATE_DIR/overrides.json"
@@ -258,6 +269,7 @@ jobs:
           echo "DOCKER_CONFIG=$STATE_DIR/harbor" >> "$GITHUB_ENV"
           echo "HARBOR_CA_FILE=$STATE_DIR/harbor/ca.crt" >> "$GITHUB_ENV"
           echo "KUBECONFIG=$STATE_DIR/kubeconfig" >> "$GITHUB_ENV"
+          echo "PUBLIC_GATEWAY_ADDRESS=$release_host:30443" >> "$GITHUB_ENV"
           echo "CI_GITOPS_IMAGE_OVERRIDES_JSON=$(jq -c . "$STATE_DIR/overrides.json")" >> "$GITHUB_ENV"
           git fetch origin main dev
           kubectl get application knowledge-core-web-dev -n argocd >/dev/null
@@ -318,7 +330,7 @@ jobs:
             -v "$HARBOR_CA_FILE:/etc/happyladysauce-ca/ca.crt:ro" \
             -e KUBECONFIG=/secrets/kubeconfig \
             -e PUBLIC_CA_FILE=/etc/happyladysauce-ca/ca.crt \
-            -e PUBLIC_GATEWAY_ADDRESS=127.0.0.1:30443 \
+            -e PUBLIC_GATEWAY_ADDRESS \
             -w /workspace "$CI_IMAGE" ./scripts/smoke.sh
           touch "$STATE_DIR/smoke.ok"
       - name: Mark dev smoke successful
