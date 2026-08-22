@@ -385,11 +385,20 @@ jobs:
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 10
     steps:
-      - name: Prune stale runner state and unused local images
+      - name: Remove run credentials and prune unused local images
         run: |
           set -euo pipefail
           install -d -m 0700 "$KC_CACHE_ROOT/runs"
-          find "$KC_CACHE_ROOT/runs" -mindepth 1 -maxdepth 1 -type d -mmin +1440 -exec rm -rf -- {} +
+          state_dir="$KC_CACHE_ROOT/runs/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          case "$state_dir" in
+            "$KC_CACHE_ROOT/runs/"[0-9]*-[0-9]*) ;;
+            *) echo "Refusing unsafe runner state path: $state_dir" >&2; exit 1 ;;
+          esac
+          if [[ -d "$state_dir" ]]; then
+            find "$state_dir" -type f -exec shred --force --remove --zero -- {} +
+            find "$state_dir" -type l -delete
+            find "$state_dir" -depth -type d -empty -delete
+          fi
           docker container prune --force --filter until=24h
           docker image prune --force --filter until=24h
           docker buildx prune --force --builder ci-templates --max-used-space 8gb --min-free-space 50gb --reserved-space 2gb || true
