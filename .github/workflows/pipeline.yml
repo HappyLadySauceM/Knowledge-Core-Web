@@ -166,20 +166,17 @@ jobs:
       - name: Ensure pinned Node base image
         run: |
           set -euo pipefail
-          base_image="harbor.happyladysauce.local/knowledge-core/base/node:24.18.1-bookworm-slim@sha256:a09aabc645e86e81e23dab78e0c0f2eaa233cab4277c7188232181a1a8bd5d39"
+          source_image="docker.m.daocloud.io/library/node:24.18.1-bookworm-slim@sha256:a09aabc645e86e81e23dab78e0c0f2eaa233cab4277c7188232181a1a8bd5d39"
+          destination_image="harbor.happyladysauce.local/knowledge-core/base/node:24.18.1-bookworm-slim"
+          base_image="$destination_image@sha256:a09aabc645e86e81e23dab78e0c0f2eaa233cab4277c7188232181a1a8bd5d39"
           if docker buildx imagetools inspect "$base_image" >/dev/null 2>&1; then
             echo "Pinned Node base image already exists in Harbor."
             exit 0
           fi
-          socket="${DOCKER_HOST:-unix:///var/run/docker.sock}"
-          socket="${socket#unix://}"
           for attempt in 1 2 3; do
-            if docker run --rm --network host \
-              -v "$GITHUB_WORKSPACE:/workspace" -v "$socket:/var/run/docker.sock" \
-              -v "$DOCKER_CONFIG:/root/.docker:ro" -v "$HARBOR_CA_FILE:/etc/harbor-ca/ca.crt:ro" \
-              -e CI_PROJECT_CONFIG_JSON -e DOCKER_HOST=unix:///var/run/docker.sock \
-              -e DOCKER_CONFIG=/root/.docker -e CI_REGISTRY_CA_FILE=/etc/harbor-ca/ca.crt \
-              -e SSL_CERT_FILE=/etc/harbor-ca/ca.crt -w /workspace "$CI_IMAGE" prewarm; then
+            if docker buildx imagetools create --prefer-index=false \
+              --tag "$destination_image" "$source_image" &&
+              docker buildx imagetools inspect "$base_image" >/dev/null; then
               exit 0
             fi
             if (( attempt < 3 )); then sleep "$((attempt * 5))"; fi
