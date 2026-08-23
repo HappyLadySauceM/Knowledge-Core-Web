@@ -19,7 +19,7 @@ health="$(raw "$web_service" 3000 /api/health)"
 test "$(jq -r '.status' <<<"$health")" = "ok"
 
 homepage="$(raw "$web_service" 3000 /en)"
-grep -q "Make ideas legible" <<<"$homepage"
+grep -q "Pages worth reading" <<<"$homepage"
 
 direct="$(raw "$gateway_service" 8080 '/api/v1/documents?limit=1')"
 jq -e . >/dev/null <<<"$direct"
@@ -50,7 +50,7 @@ case "$root_status" in
 esac
 
 public_homepage="$(public /zh-CN)"
-grep -q "Make ideas legible" <<<"$public_homepage"
+grep -q "最新文章" <<<"$public_homepage"
 
 public_api="$(public '/api/v1/documents?limit=1')"
 jq -e . >/dev/null <<<"$public_api"

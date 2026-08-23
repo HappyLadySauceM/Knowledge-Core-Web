@@ -141,7 +141,7 @@
     },
     {
       "id": "environment.toolchains",
-      "revision": 8,
+      "revision": 17,
       "section": "environment",
       "sources": [
         {
@@ -150,8 +150,12 @@
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-08-22T05:14:18Z",
+      "updatedAt": "2026-08-23T02:17:52Z",
       "value": [
+        {
+          "manifest": ".next/dev/package.json",
+          "toolchain": "node"
+        },
         {
           "manifest": ".next/package.json",
           "toolchain": "node"
@@ -384,11 +388,11 @@
     "profile": "generic",
     "slug": "knowledge-core-web"
   },
-  "revision": 16,
+  "revision": 17,
   "scan": {
-    "fingerprint": "52f0c3f18f25d301e1593d4bb96b7cda96cf5853dc71dea49940982a8e575398",
-    "inventoryCount": 845
+    "fingerprint": "8ffba8df8c0af7d3a4ab84b6d0f69fead5451277a91a8452a59ebc70dea81529",
+    "inventoryCount": 941
   },
   "schemaVersion": 1,
-  "updatedAt": "2026-08-22T06:09:26Z"
+  "updatedAt": "2026-08-23T02:17:52Z"
 }

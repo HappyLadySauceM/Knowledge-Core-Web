@@ -1,37 +1,31 @@
 import Link from "next/link";
-import { ArrowUpRight, BrainCircuit, Command, LibraryBig, Sparkles } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { ArrowDown, ArrowUpRight, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getMessages } from "@/lib/i18n";
+import { getPublishedDocuments, getSiteProfile } from "@/lib/site";
 
-export default async function Home({ params }: { params: Promise<{ locale: string }> }) {
+function formatDate(value: string | undefined, locale: string) {
+  if (!value) return "";
+  return new Intl.DateTimeFormat(locale === "zh-CN" ? "zh-CN" : "en", { year: "numeric", month: "short", day: "numeric" }).format(new Date(value));
+}
+
+export default async function Home({ params, searchParams }: { params: Promise<{ locale: string }>; searchParams: Promise<{ q?: string }> }) {
   const { locale } = await params;
+  const { q } = await searchParams;
   const t = getMessages(locale);
-  return (
-    <div className="page-shell">
-      <section className="hero-grid container-shell">
-        <div className="hero-copy">
-          <Badge variant="outline"><Sparkles size={13} /> {t.home.eyebrow}</Badge>
-          <h1>{t.home.title}</h1>
-          <p className="hero-lede">{t.home.lede}</p>
-          <div className="hero-actions">
-            <Button asChild size="lg"><Link href={`/${locale}/studio`}>{t.home.primaryCta}<ArrowUpRight size={17} /></Link></Button>
-            <Button asChild variant="ghost" size="lg"><Link href={`/${locale}/login`}>{t.home.secondaryCta}</Link></Button>
-          </div>
-          <div className="signal-row"><span><span className="signal-dot" /> {t.home.signal}</span><span>⌘ K</span></div>
-        </div>
-        <div className="hero-console" aria-label="Knowledge Core workspace preview">
-          <div className="console-top"><span className="window-dots"><i /><i /><i /></span><span>workspace / overview</span><span className="console-live">LIVE</span></div>
-          <div className="console-body">
-            <div className="console-sidebar"><span className="sidebar-mark">KC</span><span className="sidebar-line active" /><span className="sidebar-line" /><span className="sidebar-line" /><span className="sidebar-line short" /></div>
-            <div className="console-main"><p className="console-kicker">TODAY · 09:41</p><h2>Make ideas legible.</h2><p>One calm surface for notes, essays, and the conversations around them.</p><div className="console-card"><div><span className="mini-icon"><BrainCircuit size={15} /></span><span>Writing system</span></div><span className="console-arrow">↗</span></div><div className="console-card muted"><div><span className="mini-icon"><LibraryBig size={15} /></span><span>Knowledge base</span></div><span className="console-arrow">↗</span></div></div>
-          </div>
-        </div>
-      </section>
-      <section id="principles" className="principles container-shell">
-        <div><p className="eyebrow">{t.home.principlesEyebrow}</p><h2>{t.home.principlesTitle}</h2></div>
-        <div className="principle-list"><article><Command size={18} /><h3>{t.home.principleOneTitle}</h3><p>{t.home.principleOneBody}</p></article><article><BrainCircuit size={18} /><h3>{t.home.principleTwoTitle}</h3><p>{t.home.principleTwoBody}</p></article><article><LibraryBig size={18} /><h3>{t.home.principleThreeTitle}</h3><p>{t.home.principleThreeBody}</p></article></div>
-      </section>
-    </div>
-  );
+  const [profile, documents] = await Promise.all([getSiteProfile(), getPublishedDocuments(q)]);
+  const featured = documents.items[0];
+  const rest = documents.items.slice(featured ? 1 : 0);
+  const tagline = locale === "zh-CN" ? profile.tagline_zh : profile.tagline_en;
+  return <div className="editorial-home">
+    <section className="home-hero" style={{ backgroundImage: `linear-gradient(180deg, rgba(9, 16, 22, .12), rgba(9, 16, 22, .65)), url(${profile.hero_image_url})`, backgroundPosition: `${profile.hero_focal_x}% ${profile.hero_focal_y}%` }}>
+      <div className="home-hero-content container-shell"><p className="hero-brand">{profile.title}</p><h1>{tagline}</h1><p className="hero-hint">{t.home.heroHint}</p><a className="hero-scroll" href="#articles"><span>{t.home.scroll}</span><ArrowDown size={18} /></a></div>
+    </section>
+    <section id="articles" className="articles-shell container-shell">
+      <div className="articles-heading"><div><p className="eyebrow">{t.home.articlesEyebrow}</p><h2>{t.home.articlesTitle}</h2></div><form className="article-search" action={`/${locale}`}><Search size={16} /><input name="q" defaultValue={q} placeholder={t.home.searchPlaceholder} aria-label={t.home.searchPlaceholder} /><button type="submit">{t.home.search}</button></form></div>
+      {featured ? <Link href={`/${locale}/articles/${featured.slug}`} className="featured-article"><div><p className="article-kicker">{featured.tags?.[0] ?? t.home.featured}</p><h3>{featured.title}</h3><p>{featured.summary || t.home.readMore}</p><span className="article-meta">{featured.owner?.username} · {formatDate(featured.published_at ?? featured.updated_at, locale)} <ArrowUpRight size={16} /></span></div><div className="featured-art" aria-hidden="true" /></Link> : null}
+      {rest.length > 0 ? <div className="article-grid">{rest.map((document) => <Link key={document.id} href={`/${locale}/articles/${document.slug}`} className="article-card"><p className="article-kicker">{document.tags?.[0] ?? t.home.article}</p><h3>{document.title}</h3><p>{document.summary || t.home.readMore}</p><span className="article-meta">{formatDate(document.published_at ?? document.updated_at, locale)} <ArrowUpRight size={15} /></span></Link>)}</div> : null}
+      {!featured ? <div className="articles-empty"><p className="eyebrow">{t.home.emptyEyebrow}</p><h3>{t.home.emptyTitle}</h3><p>{t.home.emptyBody}</p><Button asChild variant="secondary"><Link href={`/${locale}/login`}>{t.nav.signIn}</Link></Button></div> : null}
+    </section>
+  </div>;
 }

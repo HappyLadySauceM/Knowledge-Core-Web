@@ -82,3 +82,17 @@ Knowledge-Core-Web: pnpm build-storybook 通过
 - 首次将 Web 镜像预热并发布到 development 集群。
 - 验证 Higress 对 `/api/v1/*`、BFF 和首页的线上路径优先级。
 - 随业务 API 增加认证登录、文档编辑和协作 Playwright 用户路径。
+
+## 2026-08-23：Stage 1 文档基础执行批次
+
+### 已完成
+
+- Knowledge 增加语言、个人文件夹、标签、公开发布快照和公开附件引用迁移；已有已发布文档兼容回填。
+- 发布接口改为 Gateway 编排 Collaboration 版本与 Knowledge 快照写入，重复请求使用 Idempotency-Key 安全重试。
+- Studio 文档列表、文件夹列表、文档更新元数据和公开文章页接入 BFF/Gateway。
+- 公开首页读取已发布集合，文章页提供 canonical、description、OpenGraph 基础 SEO，增加 locale RSS 输出。
+
+### 当前限制
+
+- 当前发布 HTTP 契约接收并校验 Yjs state vector，但 Collaboration 快照 RPC 仍使用现有版本接口；严格 state-vector 相等前置条件、Tiptap/Yjs 编辑器、媒体上传、作者页和归档筛选列入下一批。
+- Core 全量 Go/Rust 测试、Go/Rust 生成检查和 Web typecheck/Vitest 已通过；需要在部署环境执行迁移、真实发布回放和 Playwright 用户路径。

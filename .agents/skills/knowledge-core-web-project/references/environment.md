@@ -24,6 +24,7 @@ Sources: `user-confirmed`
 
 Status: `verified`
 
+- `{"manifest":".next/dev/package.json","toolchain":"node"}`
 - `{"manifest":".next/package.json","toolchain":"node"}`
 - `{"manifest":".next/standalone/.next/package.json","toolchain":"node"}`
 - `{"manifest":".next/standalone/package.json","toolchain":"node"}`

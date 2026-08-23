@@ -3,13 +3,19 @@ import { expect, test } from "@playwright/test";
 test("redirects the root to the default locale", async ({ page }) => {
   await page.goto("/");
   await expect(page).toHaveURL(/\/zh-CN$/);
-  await expect(page).toHaveTitle(/Knowledge Core/);
+  await expect(page).toHaveTitle(/HappyLadySauce/);
 });
 
 test("serves the health endpoint", async ({ request }) => {
   const response = await request.get("/api/health");
   expect(response.ok()).toBeTruthy();
   await expect(response.json()).resolves.toEqual({ status: "ok" });
+});
+
+test("renders the editorial homepage with a full-screen hero", async ({ page }) => {
+  await page.goto("/en");
+  await expect(page.locator(".home-hero")).toBeVisible();
+  await expect(page.locator("#articles")).toContainText("Pages worth reading");
 });
 
 test("protects the studio shell when no session cookie exists", async ({ page }) => {
