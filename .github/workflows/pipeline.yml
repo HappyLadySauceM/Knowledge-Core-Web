@@ -14,7 +14,7 @@ env:
   CI_IMAGE: harbor.happyladysauce.local/knowledge-core/ci-templates:v1.1.8@sha256:ee631cead221e78aec08a77263787a34fc80eca0bdae308cf8214c3ad385c26f
   KC_CACHE_ROOT: /opt/actions-runner/_cache/knowledge-core
   CI_PROJECT_CONFIG_JSON: >-
-    {"project":"Knowledge-Core-Web","source_repo":"HappyLadySauceM/Knowledge-Core-Web","gitops_repo":"https://github.com/HappyLadySauceM/k3s-home-deploy.git","gitops_path":"Knowledge-Core-Web","gitops_kustomization":"dev/common/kustomization.yaml","gitops_branch":"main","shared_paths":[".github",".dockerignore","package.json","pnpm-lock.yaml","next.config.ts","tsconfig.json","eslint.config.mjs","vitest.config.ts","playwright.config.ts","postcss.config.mjs","docker","scripts","public","VERSION"],"harbor_registry":"harbor.happyladysauce.local","harbor_project":"knowledge-core","argocd_server":"argocd.happyladysauce.local","smoke_command":["./scripts/smoke.sh"],"release_model":"git-independent-service-aggregate","aggregate_release_prefix":"knowledge-core-web","aggregate_version_file":"VERSION","release_language":"zh-CN","deepseek_model":"deepseek-v4-flash","base_images":[{"source":"docker.m.daocloud.io/library/node:24.18.1-bookworm-slim@sha256:a09aabc645e86e81e23dab78e0c0f2eaa233cab4277c7188232181a1a8bd5d39","destination":"harbor.happyladysauce.local/knowledge-core/base/node:24.18.1-bookworm-slim"}],"services":[{"name":"web","source_path":"src","version_file":"VERSION","dockerfile":"docker/web/Dockerfile","context":".","image_repository":"harbor.happyladysauce.local/knowledge-core/web","deploy_snapshot":"deploy/web","kustomize_name":"knowledge-core-web"}]}
+    {"project":"Knowledge-Core-Web","source_repo":"HappyLadySauceM/Knowledge-Core-Web","gitops_repo":"https://github.com/HappyLadySauceM/deploy.git","gitops_path":"Knowledge-Core-Web","gitops_kustomization":"dev/common/kustomization.yaml","gitops_branch":"main","shared_paths":[".github",".dockerignore","package.json","pnpm-lock.yaml","next.config.ts","tsconfig.json","eslint.config.mjs","vitest.config.ts","playwright.config.ts","postcss.config.mjs","docker","scripts","public","VERSION"],"harbor_registry":"harbor.happyladysauce.local","harbor_project":"knowledge-core","argocd_server":"argocd.happyladysauce.local","smoke_command":["./scripts/smoke.sh"],"release_model":"git-independent-service-aggregate","aggregate_release_prefix":"knowledge-core-web","aggregate_version_file":"VERSION","release_language":"zh-CN","deepseek_model":"deepseek-v4-flash","base_images":[{"source":"docker.m.daocloud.io/library/node:24.18.1-bookworm-slim@sha256:a09aabc645e86e81e23dab78e0c0f2eaa233cab4277c7188232181a1a8bd5d39","destination":"harbor.happyladysauce.local/knowledge-core/base/node:24.18.1-bookworm-slim"}],"services":[{"name":"web","source_path":"src","version_file":"VERSION","dockerfile":"docker/web/Dockerfile","context":".","image_repository":"harbor.happyladysauce.local/knowledge-core/web","deploy_snapshot":"deploy/web","kustomize_name":"knowledge-core-web"}]}
 
 jobs:
   plan:
@@ -228,7 +228,7 @@ jobs:
           client-id: ${{ secrets.GH_APP_ID }}
           private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
           owner: HappyLadySauceM
-          repositories: k3s-home-deploy
+          repositories: deploy
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
