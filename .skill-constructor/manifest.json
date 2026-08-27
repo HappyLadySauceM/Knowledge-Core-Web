@@ -2,37 +2,233 @@
   "createdAt": "2026-08-21T15:20:11Z",
   "facts": [
     {
-      "id": "architecture.modules",
-      "revision": 2,
+      "id": "architecture.design",
+      "revision": 20,
       "section": "architecture",
       "sources": [
         {
-          "detail": "evidence-sha256:34ef353287a835a155bc67c997cc9fa26047405b914e40c0e454ea1934b634eb",
-          "kind": "detected",
-          "reference": "filesystem:top-level-directories"
+          "kind": "documented",
+          "reference": "docs/technical-plan.md"
+        }
+      ],
+      "status": "verified",
+      "updatedAt": "2026-08-27T12:52:39Z",
+      "value": {
+        "containers": [
+          {
+            "name": "App Router UI",
+            "responsibility": "Locale pages, theme, Studio shell, and login shell",
+            "technology": "Next.js App Router, React, Tailwind"
+          },
+          {
+            "name": "BFF routes",
+            "responsibility": "HttpOnly session cookies and Gateway HTTP proxy",
+            "technology": "Next.js Route Handlers on the server"
+          },
+          {
+            "name": "Standalone Node process",
+            "responsibility": "Serves the production build on port 3000 with /api/health",
+            "technology": "Node 24 standalone output"
+          }
+        ],
+        "context": {
+          "actors": [
+            {
+              "name": "Browser user",
+              "role": "Reads public pages and uses Studio or login through the same origin"
+            },
+            {
+              "name": "Operator",
+              "role": "Deploys GitOps snapshots and inspects Argo plus smoke checks"
+            }
+          ],
+          "externalSystems": [
+            {
+              "name": "Knowledge-Core Gateway",
+              "role": "Typed HTTP edge for Identity, Knowledge, Collaboration, Attachment, and Platform"
+            },
+            {
+              "name": "Higress",
+              "role": "Cluster ingress for knowledge-core.happyladysauce.local"
+            },
+            {
+              "name": "Harbor and GitHub Actions",
+              "role": "Immutable image publish and promotion"
+            },
+            {
+              "name": "Argo CD",
+              "role": "Syncs knowledge-core-web-dev in namespace knowledge-core-dev"
+            }
+          ],
+          "relationships": [
+            {
+              "from": "Browser user",
+              "purpose": "loads UI and same-origin BFF",
+              "to": "system"
+            },
+            {
+              "from": "system",
+              "purpose": "authenticates and proxies REST",
+              "to": "Knowledge-Core Gateway"
+            },
+            {
+              "from": "Operator",
+              "purpose": "watches GitOps health",
+              "to": "Argo CD"
+            },
+            {
+              "from": "Harbor and GitHub Actions",
+              "purpose": "publishes digest-pinned images",
+              "to": "system"
+            },
+            {
+              "from": "Higress",
+              "purpose": "terminates public HTTP for the web service",
+              "to": "system"
+            }
+          ]
         },
-        {
-          "kind": "user",
-          "reference": "user-confirmed"
-        }
-      ],
-      "status": "verified",
-      "updatedAt": "2026-08-21T15:22:58Z",
-      "value": "src owns application code; deploy owns Kubernetes deployment; docker owns image definitions; scripts owns automation and smoke checks; e2e owns end-to-end tests; docs owns documentation; storybook-static and test-results are generated outputs."
-    },
-    {
-      "id": "architecture.summary",
-      "revision": 2,
-      "section": "architecture",
-      "sources": [
-        {
-          "kind": "user",
-          "reference": "user-confirmed"
-        }
-      ],
-      "status": "verified",
-      "updatedAt": "2026-08-21T15:22:58Z",
-      "value": "Next.js App Router Web/BFF. Browsers access Web; Web route handlers proxy to Gateway. Web does not directly access databases or Redis."
+        "decisions": [
+          {
+            "name": "Same-origin BFF instead of a browser Gateway client",
+            "rationale": "Keeps Knowledge-Core credentials off the client and lets the UI speak stable DTOs.",
+            "tradeoffs": [
+              "Every authenticated REST call pays a web hop",
+              "Cookie and CSRF/origin policy must be maintained in Route Handlers"
+            ]
+          },
+          {
+            "name": "Gateway remains the only Knowledge-Core edge",
+            "rationale": "Web must not reconstruct service topology or bypass typed HTTP contracts.",
+            "tradeoffs": [
+              "Web cannot query service databases for convenience",
+              "Contract changes require Knowledge-Core IDL and Gateway mapping first"
+            ]
+          },
+          {
+            "name": "Standalone Node image on port 3000",
+            "rationale": "Matches Next.js production output and keeps probes process-local.",
+            "tradeoffs": [
+              "Two replicas still share no in-process session store beyond cookies",
+              "Gateway availability is verified by smoke, not by /api/health"
+            ]
+          }
+        ],
+        "format": "structured-v1",
+        "keyFlows": [
+          {
+            "description": "The browser posts to /api/auth/login. The BFF calls Gateway /api/v1/sessions, then sets HttpOnly cookies kc_access and kc_refresh and returns only the user projection.",
+            "name": "Login and session cookies"
+          },
+          {
+            "description": "The browser calls /api/gateway/*. The BFF forwards method, body, and selected tracing headers, attaching the session cookie as the Gateway Authorization header.",
+            "name": "Authenticated Gateway proxy"
+          },
+          {
+            "description": "A 401 from Gateway with a refresh cookie present causes the BFF to call /api/v1/sessions/refresh, rotate cookies, and retry the original request once.",
+            "name": "Silent refresh"
+          },
+          {
+            "description": "Yjs WebSocket traffic goes browser to Collaboration after Knowledge issues a short-lived ticket. The web process does not persist CRDT updates.",
+            "name": "Live collaboration is not a web-owned hop"
+          }
+        ],
+        "principles": [
+          {
+            "description": "Access and refresh credentials never enter client JavaScript, localStorage, or the Next.js browser bundle.",
+            "name": "BFF owns browser sessions"
+          },
+          {
+            "description": "Server code reaches Knowledge-Core only through src/lib/api/gateway.ts and the /api/gateway proxy; pages do not scatter fetch calls.",
+            "name": "Single Gateway client"
+          },
+          {
+            "description": "Mutating BFF routes reject cross-origin requests. Health checks the web process only and does not pretend Gateway is healthy.",
+            "name": "Fail closed at the origin"
+          },
+          {
+            "description": "Folder, document, attachment, and collaboration authority stay in Knowledge-Core services. The UI must not infer permissions.",
+            "name": "Web does not own backend data"
+          }
+        ],
+        "purpose": "Knowledge-Core-Web is the Knowledge Core product surface: a Next.js App Router UI plus a same-origin BFF. It serves home, Studio, and login shells, localizes Simplified Chinese and English, and keeps Gateway session credentials in HttpOnly cookies. It does not own PostgreSQL, Redis, NATS, object storage, or Yjs persistence; those remain in Knowledge-Core behind the Gateway.",
+        "qualityAttributes": [
+          {
+            "measure": "No access or refresh credential appears outside HttpOnly cookies and server memory",
+            "name": "Credential confinement",
+            "scenario": "A page, Storybook story, or client bundle is inspected for session material"
+          },
+          {
+            "measure": "The route returns 403 and does not call Gateway",
+            "name": "Origin integrity",
+            "scenario": "A cross-site POST reaches a mutating BFF route"
+          },
+          {
+            "measure": "/api/health answers from the Node process without requiring Gateway",
+            "name": "Operability",
+            "scenario": "Kubernetes probes the web process"
+          },
+          {
+            "measure": "Harbor digest, Argo sync, and smoke checks pass before fast-forward to main; force-push is forbidden",
+            "name": "Delivery safety",
+            "scenario": "A candidate image is promoted"
+          }
+        ],
+        "risks": [
+          {
+            "mitigation": "Treat docs/progress.md as historical; record only behavior present in src/app/api and deploy/web.",
+            "name": "Docs lag the BFF"
+          },
+          {
+            "mitigation": "Do not claim document, folder, AI, or community features until those Gateway flows are wired and tested.",
+            "name": "Studio shells without domain APIs"
+          },
+          {
+            "mitigation": "Keep those environment definitions unnamed beyond kind; never invent namespaces, replica counts, or digests.",
+            "name": "Unobserved production and canary"
+          }
+        ],
+        "scope": {
+          "in": [
+            "Desktop-first public and authenticated UI shells, including locale routes for zh-CN and en",
+            "Same-origin BFF for login, registration, session, logout, and Gateway HTTP proxy",
+            "Process-local health at /api/health",
+            "Standalone Node production image on port 3000 and Kustomize packaging under deploy/web"
+          ],
+          "out": [
+            "Direct access to Identity, Knowledge, Collaboration, Attachment, or Platform",
+            "Ownership of PostgreSQL schemas, Redis, NATS JetStream, MinIO/S3, or Yjs CRDT state",
+            "Gateway HTTP routes, Higress routing, or cluster network policy",
+            "Native mobile apps, old-site content migration, or claiming unobserved production or canary topologies"
+          ]
+        },
+        "stakeholders": [
+          {
+            "concerns": [
+              "usable writing and reading surfaces",
+              "sessions that stay in the browser origin",
+              "predictable locale and theme behavior"
+            ],
+            "name": "Authors and small teams"
+          },
+          {
+            "concerns": [
+              "immutable Harbor images",
+              "Argo-synced k3s-dev delivery",
+              "process health without hiding Gateway failures"
+            ],
+            "name": "Operators"
+          },
+          {
+            "concerns": [
+              "one Gateway client",
+              "strict TypeScript and UI quality gates",
+              "no credential leakage into client bundles"
+            ],
+            "name": "Web developers"
+          }
+        ]
+      }
     },
     {
       "id": "boundaries.repository",
@@ -85,7 +281,7 @@
     },
     {
       "id": "constraints.project",
-      "revision": 2,
+      "revision": 20,
       "section": "constraints",
       "sources": [
         {
@@ -94,12 +290,31 @@
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-08-21T15:22:58Z",
-      "value": "Web does not directly own backend data access; images use immutable digests; no plaintext secrets or force pushes; Gateway routes and network policies are owned by k3s configuration."
+      "updatedAt": "2026-08-27T12:52:39Z",
+      "value": "- Web does not own backend data access and must not bypass Gateway.\n- Production images use immutable Harbor digests.\n- Do not commit plaintext secrets or force-push shared history.\n- Gateway routes and network policies are owned by k3s configuration, not this repository.\n- `/api/health` checks the web process only; Gateway dependence is verified by smoke."
+    },
+    {
+      "id": "conventions.code-layout",
+      "revision": 20,
+      "section": "conventions",
+      "sources": [
+        {
+          "detail": "evidence-sha256:34ef353287a835a155bc67c997cc9fa26047405b914e40c0e454ea1934b634eb",
+          "kind": "detected",
+          "reference": "filesystem:top-level-directories"
+        },
+        {
+          "kind": "user",
+          "reference": "user-confirmed"
+        }
+      ],
+      "status": "verified",
+      "updatedAt": "2026-08-27T12:52:39Z",
+      "value": "src/app owns App Router pages, layouts, and BFF route handlers.\nsrc/components owns UI and studio shells.\nsrc/lib owns i18n, the Gateway client, and collaboration helpers.\ndeploy/web owns Kustomize base and overlays.\ndocker owns the production image.\nscripts owns smoke checks.\ne2e owns Playwright specs.\ndocs owns product and technical decisions.\nstorybook-static, test-results, playwright-report, and .next are generated outputs."
     },
     {
       "id": "conventions.code-style",
-      "revision": 2,
+      "revision": 20,
       "section": "conventions",
       "sources": [
         {
@@ -108,12 +323,12 @@
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-08-21T15:22:58Z",
-      "value": "Use strict TypeScript and ESLint; validate with Vitest, Playwright, build, and Storybook. Keep Gateway access server-side and never expose tokens to clients."
+      "updatedAt": "2026-08-27T12:52:39Z",
+      "value": "Use strict TypeScript and ESLint. Validate with Vitest, Playwright, production build, and Storybook. Keep Gateway access on the server. Do not put session credentials in client code, cookies readable by JavaScript, or logs."
     },
     {
       "id": "entrypoints.catalog",
-      "revision": 2,
+      "revision": 20,
       "section": "services",
       "sources": [
         {
@@ -122,26 +337,72 @@
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-08-21T15:22:58Z",
-      "value": "Development: pnpm dev. Production: .next/standalone/server.js. Health: /api/health. Smoke: scripts/smoke.sh. Kubernetes deployment: deploy/web/overlay/dev."
+      "updatedAt": "2026-08-27T12:52:39Z",
+      "value": "Local development is `pnpm dev`. Production serves `.next/standalone/server.js` on port 3000. Process health is `/api/health`. Deployment smoke is `scripts/smoke.sh`. Kubernetes packaging lives under `deploy/web`, with the current overlay at `deploy/web/overlay/dev`."
+    },
+    {
+      "id": "environment.definitions",
+      "revision": 20,
+      "section": "environment",
+      "sources": [
+        {
+          "kind": "documented",
+          "reference": "deploy/web/overlay/dev/config.yaml"
+        }
+      ],
+      "status": "verified",
+      "updatedAt": "2026-08-27T12:52:39Z",
+      "value": [
+        {
+          "evidenceCommand": "pnpm dev",
+          "kind": "pnpm-dev",
+          "name": "local-dev",
+          "path": "."
+        },
+        {
+          "evidenceCommand": "kubectl -n knowledge-core-dev get deploy,svc knowledge-core-web",
+          "kind": "kubernetes",
+          "name": "k3s-dev",
+          "namespace": "knowledge-core-dev",
+          "path": "deploy/web"
+        },
+        {
+          "evidenceCommand": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+          "kind": "github-actions",
+          "name": "test",
+          "path": ".github/workflows/ci.yml"
+        },
+        {
+          "kind": "kubernetes",
+          "name": "production"
+        },
+        {
+          "kind": "kubernetes",
+          "name": "canary-gray"
+        }
+      ]
     },
     {
       "id": "environment.setup",
-      "revision": 2,
+      "revision": 20,
       "section": "environment",
       "sources": [
+        {
+          "kind": "documented",
+          "reference": "package.json"
+        },
         {
           "kind": "user",
           "reference": "user-confirmed"
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-08-21T15:22:58Z",
-      "value": "Node.js 24.18.1 and pnpm 10.31.0; use pnpm install --frozen-lockfile. Runtime requires non-secret KNOWLEDGE_CORE_GATEWAY_URL; secrets are injected externally."
+      "updatedAt": "2026-08-27T12:52:39Z",
+      "value": "Use Node.js 24.18.1 (CI pin; package engines allow >=20.9.0) and pnpm 10.31.0. Install with `pnpm install --frozen-lockfile`. Inject non-secret `KNOWLEDGE_CORE_GATEWAY_URL` for the BFF; the local default is http://localhost:8080. Cluster overlay deploy/web/overlay/dev points at knowledge-core-gateway in namespace knowledge-core-dev. Secrets stay in GitHub or Kubernetes Secrets."
     },
     {
       "id": "environment.toolchains",
-      "revision": 17,
+      "revision": 18,
       "section": "environment",
       "sources": [
         {
@@ -150,24 +411,8 @@
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-08-23T02:17:52Z",
+      "updatedAt": "2026-08-27T12:48:24Z",
       "value": [
-        {
-          "manifest": ".next/dev/package.json",
-          "toolchain": "node"
-        },
-        {
-          "manifest": ".next/package.json",
-          "toolchain": "node"
-        },
-        {
-          "manifest": ".next/standalone/.next/package.json",
-          "toolchain": "node"
-        },
-        {
-          "manifest": ".next/standalone/package.json",
-          "toolchain": "node"
-        },
         {
           "manifest": "package.json",
           "toolchain": "node"
@@ -190,7 +435,7 @@
     },
     {
       "id": "security.secrets-and-config",
-      "revision": 2,
+      "revision": 20,
       "section": "conventions",
       "sources": [
         {
@@ -199,22 +444,56 @@
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-08-21T15:22:58Z",
-      "value": "Inject secrets through GitHub or Kubernetes Secrets only; do not commit plaintext secrets. Authentication cookies are HttpOnly, Secure, and use appropriate SameSite; logs must not contain tokens or sensitive data."
+      "updatedAt": "2026-08-27T12:52:39Z",
+      "value": "Inject secrets through GitHub or Kubernetes Secrets only; do not commit plaintext secrets. Authentication cookies are HttpOnly, Secure when the request is HTTPS, and use SameSite Lax for access and Strict for refresh. Logs, metrics, and client bundles must not contain session credentials."
     },
     {
       "id": "services.catalog",
-      "revision": 2,
+      "revision": 20,
       "section": "services",
       "sources": [
+        {
+          "kind": "documented",
+          "reference": "deploy/web/base/deployment.yaml"
+        },
         {
           "kind": "user",
           "reference": "user-confirmed"
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-08-21T15:22:58Z",
-      "value": "The web service is a Next.js server/BFF listening on port 3000 and depends on knowledge-core-gateway."
+      "updatedAt": "2026-08-27T12:52:39Z",
+      "value": [
+        {
+          "apis": "App Router pages under /{locale}; BFF /api/auth/*, /api/gateway/[...path], /api/health",
+          "data": "None; no domain schema",
+          "dependencies": [
+            "knowledge-core-gateway"
+          ],
+          "doesNotOwn": "PostgreSQL, Redis, NATS, MinIO/S3, Yjs persistence, Gateway routes, or cluster network policy",
+          "health": "/api/health",
+          "language": "TypeScript",
+          "name": "knowledge-core-web",
+          "ports": {
+            "http": 3000
+          },
+          "role": "Next.js UI and same-origin BFF"
+        }
+      ]
+    },
+    {
+      "id": "services.relationships",
+      "revision": 20,
+      "section": "services",
+      "sources": [
+        {
+          "kind": "documented",
+          "reference": "docs/technical-plan.md"
+        }
+      ],
+      "status": "verified",
+      "updatedAt": "2026-08-27T12:52:39Z",
+      "value": "The browser talks only to Knowledge-Core-Web on the same origin. The BFF authenticates through `/api/auth/*` and proxies Gateway HTTP through `/api/gateway/[...path]`. knowledge-core-web depends on knowledge-core-gateway and does not call Identity, Knowledge, Collaboration, Attachment, or Platform directly. Live Yjs traffic is a browser-to-Collaboration path after Knowledge issues a short-lived ticket; the web process does not persist CRDT updates.\n\n```mermaid\nflowchart LR\n  Browser --> WebBFF[knowledge-core-web :3000]\n  WebBFF --> Gateway[knowledge-core-gateway :8080]\n  Gateway --> Identity\n  Gateway --> Knowledge\n  Gateway --> Collaboration\n  Gateway --> Attachment\n  Gateway --> Platform\n  Browser -.->|Yjs WebSocket after ticket| Collaboration\n```"
     },
     {
       "id": "validation.definition-of-done",
@@ -232,7 +511,7 @@
     },
     {
       "id": "workflows.build",
-      "revision": 1,
+      "revision": 18,
       "section": "workflows",
       "sources": [
         {
@@ -241,44 +520,39 @@
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-08-21T15:20:11Z",
+      "updatedAt": "2026-08-27T12:48:24Z",
       "value": {
         "npm:build": {
           "command": "next build",
-          "source": ".next/standalone/package.json"
+          "source": "package.json"
         },
         "npm:build-storybook": {
           "command": "storybook build",
-          "source": ".next/standalone/package.json"
+          "source": "package.json"
         }
       }
     },
     {
       "id": "workflows.development",
-      "revision": 1,
+      "revision": 20,
       "section": "workflows",
       "sources": [
         {
           "kind": "detected",
           "reference": "detected:project-scripts"
+        },
+        {
+          "kind": "user",
+          "reference": "user-confirmed"
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-08-21T15:20:11Z",
-      "value": {
-        "npm:dev": {
-          "command": "next dev",
-          "source": ".next/standalone/package.json"
-        },
-        "npm:start": {
-          "command": "next start",
-          "source": ".next/standalone/package.json"
-        }
-      }
+      "updatedAt": "2026-08-27T12:52:39Z",
+      "value": "Work on the existing branch. Use pnpm for all Node commands. Local development is `pnpm dev`. Production start is `pnpm start` after `pnpm build`. Command tables remain in the generated workflow appendix."
     },
     {
       "id": "workflows.quality",
-      "revision": 1,
+      "revision": 18,
       "section": "workflows",
       "sources": [
         {
@@ -287,76 +561,21 @@
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-08-21T15:20:11Z",
+      "updatedAt": "2026-08-27T12:48:24Z",
       "value": {
         "npm:lint": {
           "command": "eslint .",
-          "source": ".next/standalone/package.json"
+          "source": "package.json"
         },
         "npm:typecheck": {
           "command": "tsc --noEmit",
-          "source": ".next/standalone/package.json"
-        }
-      }
-    },
-    {
-      "id": "workflows.scripts",
-      "revision": 1,
-      "section": "workflows",
-      "sources": [
-        {
-          "kind": "detected",
-          "reference": "detected:project-scripts"
-        }
-      ],
-      "status": "verified",
-      "updatedAt": "2026-08-21T15:20:11Z",
-      "value": {
-        "npm:build": {
-          "command": "next build",
-          "source": ".next/standalone/package.json"
-        },
-        "npm:build-storybook": {
-          "command": "storybook build",
-          "source": ".next/standalone/package.json"
-        },
-        "npm:dev": {
-          "command": "next dev",
-          "source": ".next/standalone/package.json"
-        },
-        "npm:e2e": {
-          "command": "playwright test",
-          "source": ".next/standalone/package.json"
-        },
-        "npm:lint": {
-          "command": "eslint .",
-          "source": ".next/standalone/package.json"
-        },
-        "npm:start": {
-          "command": "next start",
-          "source": ".next/standalone/package.json"
-        },
-        "npm:storybook": {
-          "command": "storybook dev -p 6006",
-          "source": ".next/standalone/package.json"
-        },
-        "npm:test": {
-          "command": "vitest run",
-          "source": ".next/standalone/package.json"
-        },
-        "npm:test:watch": {
-          "command": "vitest",
-          "source": ".next/standalone/package.json"
-        },
-        "npm:typecheck": {
-          "command": "tsc --noEmit",
-          "source": ".next/standalone/package.json"
+          "source": "package.json"
         }
       }
     },
     {
       "id": "workflows.test",
-      "revision": 1,
+      "revision": 18,
       "section": "workflows",
       "sources": [
         {
@@ -365,22 +584,22 @@
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-08-21T15:20:11Z",
+      "updatedAt": "2026-08-27T12:48:24Z",
       "value": {
         "npm:test": {
           "command": "vitest run",
-          "source": ".next/standalone/package.json"
+          "source": "package.json"
         },
         "npm:test:watch": {
           "command": "vitest",
-          "source": ".next/standalone/package.json"
+          "source": "package.json"
         }
       }
     }
   ],
   "generator": {
     "name": "skill-constructor",
-    "version": "0.4.3"
+    "version": "0.7.0"
   },
   "project": {
     "language": "en",
@@ -388,11 +607,11 @@
     "profile": "generic",
     "slug": "knowledge-core-web"
   },
-  "revision": 17,
+  "revision": 20,
   "scan": {
-    "fingerprint": "8ffba8df8c0af7d3a4ab84b6d0f69fead5451277a91a8452a59ebc70dea81529",
-    "inventoryCount": 941
+    "fingerprint": "2a543f4f36a8afd78c6497789e660c3abf77fef80f4c2c06b0178a77cf2df358",
+    "inventoryCount": 82
   },
-  "schemaVersion": 1,
-  "updatedAt": "2026-08-23T02:17:52Z"
+  "schemaVersion": 3,
+  "updatedAt": "2026-08-27T12:52:39Z"
 }

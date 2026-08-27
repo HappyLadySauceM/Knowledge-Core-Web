@@ -7,27 +7,33 @@ description: "Project-specific engineering guidance for Knowledge-Core-Web. Use 
 
 # Knowledge-Core-Web Project Guide
 
-Manifest revision: `17`. Manifest digest: `85e99c71514ee071`.
+Manifest revision: `20`. Manifest digest: `afcd3e11cd7629d5`.
 
 ## Required Workflow
 
-- Read the references relevant to the task before making decisions or edits.
+- Read the English references under `references/en/` before making decisions or edits.
+- Do not read `references/zh/` unless `$sync-project-skill-locales` reports locale drift.
+  Humans may open the Chinese copies; they are translations, not the agent default.
 - Treat only verified facts as project constraints; do not promote candidates or conflicts.
 - Stop and use `$maintain-project-skill` when required facts are unresolved or evidence conflicts.
+- During architecture, environment, services, workflows, conventions, or constraints work, do not
+  record, render, or edit this skill until the original task is finished.
+- After that work is complete, update English facts, render, then run `$sync-project-skill-locales`
+  when `skill-constructor locales` is not fully synced.
 - Run the recorded validation commands before finishing and report any unavailable checks.
-- Let the task-end harness update this skill; do not edit generated files directly.
+- Let the task-end harness update English projections; do not edit generated English files directly.
 - Keep `.skill-constructor/manifest.json` and this generated Skill directory under version control, and
   include synchronized updates with the related engineering commit unless the manifest records a
   verified exception.
 
 ## References
 
-- Read [references/environment.md](references/environment.md) when the task touches environment.
-- Read [references/architecture.md](references/architecture.md) when the task touches architecture.
-- Read [references/services.md](references/services.md) when the task touches services.
-- Read [references/workflows.md](references/workflows.md) when the task touches workflows.
-- Read [references/conventions.md](references/conventions.md) when the task touches conventions.
-- Read [references/constraints.md](references/constraints.md) when the task touches constraints.
+- Read [references/en/environment.md](references/en/environment.md) when the task touches environment.
+- Read [references/en/architecture.md](references/en/architecture.md) when the task touches architecture.
+- Read [references/en/services.md](references/en/services.md) when the task touches services.
+- Read [references/en/workflows.md](references/en/workflows.md) when the task touches workflows.
+- Read [references/en/conventions.md](references/en/conventions.md) when the task touches conventions.
+- Read [references/en/constraints.md](references/en/constraints.md) when the task touches constraints.
 
 ## Coverage
 
