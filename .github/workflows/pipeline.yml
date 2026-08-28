@@ -97,7 +97,7 @@ jobs:
             exit 1
           fi
           registry="harbor.happyladysauce.local"
-          expected_username='robot$knowledge-core+ci-push'
+          expected_username='robot$knowledge-core+ci-devops'
           jq -e --arg registry "$registry" --arg username "$expected_username" \
             '.auths[$registry].username == $username and
              (.auths[$registry].password | type == "string" and length >= 8) and
@@ -411,7 +411,8 @@ jobs:
             *) echo "Refusing unsafe runner state path: $state_dir" >&2; exit 1 ;;
           esac
           if [[ -d "$state_dir" ]]; then
-            find "$state_dir" -type f -exec shred --force --remove --zero -- {} +
+            find "$state_dir" -type f -exec shred --force --remove --zero -- {} + || true
+            find "$state_dir" -type f -delete
             find "$state_dir" -type l -delete
             find "$state_dir" -depth -type d -empty -delete
           fi
