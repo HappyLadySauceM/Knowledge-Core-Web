@@ -4,11 +4,11 @@
 
 Work on the existing branch. Use pnpm for all Node commands. Local development is `pnpm dev`. Production start is `pnpm start` after `pnpm build`. Command tables remain in the generated workflow appendix.
 
-<!-- fact:workflows.development status:verified sources:detected:project-scripts, user-confirmed -->
+<!-- fact:workflows.development status:verified sources:detected:project-scripts, user-confirmed, user-confirmed-development-commands -->
 
-PR, main, and dev run verification. Pushes to dev build immutable Harbor images, update GitOps, sync Argo dev, run smoke checks, then promote by fast-forwarding main and releasing. Failures support rollback.
+Public PR and main verification remain on GitHub-hosted runners. Pushes to dev run the trusted release chain on the organization self-hosted runner label `devops`: build immutable Harbor images, update GitOps, sync Argo dev, run smoke checks, then promote by fast-forwarding main and releasing. The self-hosted cleanup is restricted to per-run state and the dedicated Buildx cache. Failures support rollback.
 
-<!-- fact:cicd.pipeline status:verified sources:user-confirmed -->
+<!-- fact:cicd.pipeline status:verified sources:user-confirmed, user-confirmed-runner-migration -->
 
 Lint, typecheck, unit tests, production build, e2e, Storybook, Docker build, Kustomize render and server dry-run, Argo sync, and deployment smoke checks pass.
 

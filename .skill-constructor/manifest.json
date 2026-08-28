@@ -267,17 +267,21 @@
     },
     {
       "id": "cicd.pipeline",
-      "revision": 2,
+      "revision": 21,
       "section": "workflows",
       "sources": [
         {
           "kind": "user",
           "reference": "user-confirmed"
+        },
+        {
+          "kind": "user",
+          "reference": "user-confirmed-runner-migration"
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-08-21T15:22:58Z",
-      "value": "PR, main, and dev run verification. Pushes to dev build immutable Harbor images, update GitOps, sync Argo dev, run smoke checks, then promote by fast-forwarding main and releasing. Failures support rollback."
+      "updatedAt": "2026-08-28T04:10:09Z",
+      "value": "Public PR and main verification remain on GitHub-hosted runners. Pushes to dev run the trusted release chain on the organization self-hosted runner label `devops`: build immutable Harbor images, update GitOps, sync Argo dev, run smoke checks, then promote by fast-forwarding main and releasing. The self-hosted cleanup is restricted to per-run state and the dedicated Buildx cache. Failures support rollback."
     },
     {
       "id": "constraints.project",
@@ -534,7 +538,7 @@
     },
     {
       "id": "workflows.development",
-      "revision": 20,
+      "revision": 23,
       "section": "workflows",
       "sources": [
         {
@@ -544,10 +548,14 @@
         {
           "kind": "user",
           "reference": "user-confirmed"
+        },
+        {
+          "kind": "user",
+          "reference": "user-confirmed-development-commands"
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-08-27T12:52:39Z",
+      "updatedAt": "2026-08-28T04:49:07Z",
       "value": "Work on the existing branch. Use pnpm for all Node commands. Local development is `pnpm dev`. Production start is `pnpm start` after `pnpm build`. Command tables remain in the generated workflow appendix."
     },
     {
@@ -607,11 +615,11 @@
     "profile": "generic",
     "slug": "knowledge-core-web"
   },
-  "revision": 20,
+  "revision": 23,
   "scan": {
-    "fingerprint": "2a543f4f36a8afd78c6497789e660c3abf77fef80f4c2c06b0178a77cf2df358",
+    "fingerprint": "d97554a791e9e7c04a97598e2a07a59305ab2a411de5a37d6ae14bead2318490",
     "inventoryCount": 82
   },
   "schemaVersion": 3,
-  "updatedAt": "2026-08-27T12:52:39Z"
+  "updatedAt": "2026-08-28T04:49:07Z"
 }

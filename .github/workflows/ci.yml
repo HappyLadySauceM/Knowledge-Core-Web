@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main, dev]
   workflow_call:
+    inputs:
+      runner_label:
+        required: false
+        type: string
   workflow_dispatch:
 
 permissions:
@@ -17,7 +21,7 @@ concurrency:
 
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner_label || 'ubuntu-latest' }}
     timeout-minutes: 15
     steps:
       - name: Checkout
@@ -49,8 +53,13 @@ jobs:
       - name: Production build
         run: pnpm build
 
-      - name: Install Playwright browser
+      - name: Install Playwright browser and system dependencies
+        if: runner.environment == 'github-hosted'
         run: pnpm exec playwright install --with-deps chromium
+
+      - name: Install Playwright browser
+        if: runner.environment == 'self-hosted'
+        run: pnpm exec playwright install chromium
 
       - name: End-to-end tests
         run: pnpm e2e

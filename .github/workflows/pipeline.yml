@@ -18,7 +18,7 @@ env:
 
 jobs:
   plan:
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: [self-hosted, Linux, X64, devops]
     timeout-minutes: 10
     concurrency:
       group: knowledge-core-web-dev-plan
@@ -57,7 +57,7 @@ jobs:
   release-preflight:
     needs: plan
     if: needs.plan.outputs.has_changes == 'true'
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: [self-hosted, Linux, X64, devops]
     timeout-minutes: 5
     environment: release
     concurrency:
@@ -107,11 +107,13 @@ jobs:
     needs: plan
     if: needs.plan.outputs.has_changes == 'true'
     uses: ./.github/workflows/ci.yml
+    with:
+      runner_label: devops
 
   release-notes:
     needs: [plan, release-preflight]
     if: needs.plan.outputs.has_changes == 'true' && needs.release-preflight.result == 'success'
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: [self-hosted, Linux, X64, devops]
     timeout-minutes: 10
     environment: release
     concurrency:
@@ -137,7 +139,7 @@ jobs:
   package-candidates:
     needs: [plan, release-preflight, web-verify-build, release-notes]
     if: always() && needs.plan.outputs.has_changes == 'true' && needs.release-preflight.result == 'success' && needs.web-verify-build.result == 'success' && needs.release-notes.result == 'success'
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: [self-hosted, Linux, X64, devops]
     timeout-minutes: 30
     concurrency:
       group: knowledge-core-web-dev-package
@@ -214,7 +216,7 @@ jobs:
     permissions:
       contents: write
       statuses: write
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: [self-hosted, Linux, X64, devops]
     timeout-minutes: 45
     environment: release
     concurrency:
@@ -382,10 +384,10 @@ jobs:
   cleanup:
     needs: [plan, release-preflight, web-verify-build, release-notes, package-candidates, deploy-release]
     if: always()
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: [self-hosted, Linux, X64, devops]
     timeout-minutes: 10
     steps:
-      - name: Remove run credentials and prune unused local images
+      - name: Remove run credentials and prune dedicated Buildx cache
         run: |
           set -euo pipefail
           install -d -m 0700 "$KC_CACHE_ROOT/runs"
@@ -399,6 +401,4 @@ jobs:
             find "$state_dir" -type l -delete
             find "$state_dir" -depth -type d -empty -delete
           fi
-          docker container prune --force --filter until=24h
-          docker image prune --force --filter until=24h
           docker buildx prune --force --builder ci-templates --max-used-space 8gb --min-free-space 50gb --reserved-space 2gb || true

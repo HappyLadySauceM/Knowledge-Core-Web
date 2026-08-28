@@ -2,13 +2,13 @@
 
 # Knowledge-Core-Web: 工作流
 
-在现有分支上工作。所有 Node 命令使用 pnpm。本地开发是 `pnpm dev`。生产启动是 `pnpm build` 之后的 `pnpm start`。命令对照表仍在生成的工作流附录中。
+在现有分支上工作。所有 Node 命令使用 pnpm。本地开发是 `pnpm dev`。生产启动是在 `pnpm build` 后执行 `pnpm start`。命令对照表仍在生成的工作流附录中。
 
-<!-- fact:workflows.development status:verified sources:detected:project-scripts, user-confirmed -->
+<!-- fact:workflows.development status:verified sources:detected:project-scripts, user-confirmed, user-confirmed-development-commands -->
 
-PR、main 和 dev 都会跑验证。推送到 dev 会构建不可变 Harbor 镜像、更新 GitOps、同步 Argo dev、跑冒烟检查，然后通过快进 main 并发布来提升。失败支持回滚。
+公开 PR 和 main 验证继续使用 GitHub-hosted runner。推送到 dev 的受信任发布链路运行在组织级 self-hosted runner 标签 `devops`：构建不可变 Harbor 镜像、更新 GitOps、同步 Argo dev、跑冒烟检查，然后通过快进 main 并发布来提升。self-hosted 清理只处理单次运行状态和专用 Buildx 缓存。失败支持回滚。
 
-<!-- fact:cicd.pipeline status:verified sources:user-confirmed -->
+<!-- fact:cicd.pipeline status:verified sources:user-confirmed, user-confirmed-runner-migration -->
 
 Lint、类型检查、单元测试、生产构建、e2e、Storybook、Docker 构建、Kustomize 渲染与 server dry-run、Argo 同步以及部署冒烟检查都必须通过。
 
