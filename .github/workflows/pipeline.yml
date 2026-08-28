@@ -31,6 +31,20 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+      - name: Prepare Harbor credentials for CI image
+        env:
+          HARBOR_DOCKER_CONFIG_JSON: ${{ secrets.HARBOR_DOCKER_CONFIG_JSON }}
+          HARBOR_CA_PEM: ${{ secrets.HARBOR_CA_PEM }}
+        run: |
+          set -euo pipefail
+          umask 077
+          install -d "$RUNNER_TEMP/knowledge-core-harbor"
+          printf '%s' "$HARBOR_DOCKER_CONFIG_JSON" > "$RUNNER_TEMP/knowledge-core-harbor/config.json"
+          printf '%s' "$HARBOR_CA_PEM" > "$RUNNER_TEMP/knowledge-core-harbor/ca.crt"
+          test -s "$RUNNER_TEMP/knowledge-core-harbor/config.json"
+          test -s "$RUNNER_TEMP/knowledge-core-harbor/ca.crt"
+          echo "DOCKER_CONFIG=$RUNNER_TEMP/knowledge-core-harbor" >> "$GITHUB_ENV"
+          echo "SSL_CERT_FILE=$RUNNER_TEMP/knowledge-core-harbor/ca.crt" >> "$GITHUB_ENV"
       - name: Plan affected service
         id: plan
         run: |
