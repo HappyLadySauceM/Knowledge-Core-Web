@@ -262,7 +262,11 @@ jobs:
           install -d "$STATE_DIR/harbor"
           printf '%s' "$HARBOR_DOCKER_CONFIG_JSON" > "$STATE_DIR/harbor/config.json"
           printf '%s' "$HARBOR_CA_PEM" > "$STATE_DIR/harbor/ca.crt"
-          printf '%s' "$K3S_RELEASE_KUBECONFIG" > "$STATE_DIR/kubeconfig"
+          if [[ -r /etc/rancher/k3s/k3s.yaml ]]; then
+            sed 's#server: https://.*#server: https://127.0.0.1:6443#' /etc/rancher/k3s/k3s.yaml > "$STATE_DIR/kubeconfig"
+          else
+            printf '%s' "$K3S_RELEASE_KUBECONFIG" > "$STATE_DIR/kubeconfig"
+          fi
           test -s "$STATE_DIR/harbor/config.json"
           test -s "$STATE_DIR/harbor/ca.crt"
           test -s "$STATE_DIR/kubeconfig"
