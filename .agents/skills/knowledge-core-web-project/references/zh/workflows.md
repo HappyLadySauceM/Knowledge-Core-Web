@@ -6,9 +6,9 @@
 
 <!-- fact:workflows.development status:verified sources:detected:project-scripts, user-confirmed, user-confirmed-development-commands -->
 
-公开 PR 和 main 验证继续使用 GitHub-hosted runner。推送到 dev 的受信任发布链路运行在组织级 self-hosted runner 标签 `devops`：构建不可变 Harbor 镜像、更新 GitOps、同步 Argo dev、跑冒烟检查，然后通过快进 main 并发布来提升。self-hosted 清理只处理单次运行状态和专用 Buildx 缓存。失败支持回滚。
+公开 PR 和 main 验证继续使用 GitHub-hosted runner。推送到 dev 的受信任发布链路运行在组织级 self-hosted runner 标签 `devops`：以 runner 有效 CPU（CPU 亲和性与 cgroup 配额）的 75% 设置并行度，构建不可变 Harbor 镜像，更新 GitOps 中由源码维护的部署快照，同步 Argo dev，运行冒烟检查，然后通过快进 main 并发布来提升。`BUILD_CPU_PERCENT` 可调整比例，`BUILD_JOBS` 仅作为有界的紧急覆盖。Knowledge-Core-Web/deploy 是可编辑的部署源，CI 会自动将其同步到 HappyLadySauceM/deploy/Knowledge-Core-Web；仅修改部署时跳过镜像构建，但仍校验 overlay、更新 GitOps、等待 Argo、运行冒烟并提升 main。self-hosted 清理只处理单次运行状态和专用 Buildx 缓存。失败支持回滚，且禁止强制推送。
 
-<!-- fact:cicd.pipeline status:verified sources:user-confirmed, user-confirmed-runner-migration -->
+<!-- fact:cicd.pipeline status:verified sources:user-confirmed, user-confirmed-cicd-ratio-and-source-deploy-sync, user-confirmed-runner-migration -->
 
 Lint、类型检查、单元测试、生产构建、e2e、Storybook、Docker 构建、Kustomize 渲染与 server dry-run、Argo 同步以及部署冒烟检查都必须通过。
 

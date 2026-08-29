@@ -6,9 +6,9 @@ Work on the existing branch. Use pnpm for all Node commands. Local development i
 
 <!-- fact:workflows.development status:verified sources:detected:project-scripts, user-confirmed, user-confirmed-development-commands -->
 
-Public PR and main verification remain on GitHub-hosted runners. Pushes to dev run the trusted release chain on the organization self-hosted runner label `devops`: build immutable Harbor images, update GitOps, sync Argo dev, run smoke checks, then promote by fast-forwarding main and releasing. The self-hosted cleanup is restricted to per-run state and the dedicated Buildx cache. Failures support rollback.
+Public PR and main verification remain on GitHub-hosted runners. Pushes to dev run the trusted release chain on the organization self-hosted runner label `devops`: build immutable Harbor images with parallelism set to 75% of effective runner CPUs (affinity and cgroup quota), update the source-owned deploy snapshot in GitOps, sync Argo dev, run smoke checks, then promote by fast-forwarding main and releasing. `BUILD_CPU_PERCENT` changes the ratio and `BUILD_JOBS` is only a bounded emergency override. Knowledge-Core-Web/deploy is the editable deployment source and CI synchronizes it automatically to HappyLadySauceM/deploy/Knowledge-Core-Web; deploy-only changes skip image builds while still validating the overlay, updating GitOps, waiting for Argo, running smoke, and promoting main. The self-hosted cleanup is restricted to per-run state and the dedicated Buildx cache. Failures support rollback, and force-push is forbidden.
 
-<!-- fact:cicd.pipeline status:verified sources:user-confirmed, user-confirmed-runner-migration -->
+<!-- fact:cicd.pipeline status:verified sources:user-confirmed, user-confirmed-cicd-ratio-and-source-deploy-sync, user-confirmed-runner-migration -->
 
 Lint, typecheck, unit tests, production build, e2e, Storybook, Docker build, Kustomize render and server dry-run, Argo sync, and deployment smoke checks pass.
 

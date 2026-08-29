@@ -10,6 +10,10 @@ RUN pnpm install --frozen-lockfile
 
 FROM deps AS builder
 WORKDIR /app
+ARG BUILD_CPU_PERCENT=75
+ARG BUILD_JOBS
+ENV BUILD_CPU_PERCENT=${BUILD_CPU_PERCENT} \
+    BUILD_JOBS=${BUILD_JOBS}
 COPY . .
 RUN mkdir -p public && pnpm build
 

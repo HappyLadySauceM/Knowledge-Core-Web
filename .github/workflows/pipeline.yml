@@ -11,7 +11,8 @@ permissions:
   statuses: write
 
 env:
-  CI_IMAGE: harbor.happyladysauce.local/knowledge-core/ci-templates:v1.1.10@sha256:016de2847483bc544b00a8127bea52a0b939341654718845f29c0464b48aaa0e
+  CI_IMAGE: harbor.happyladysauce.local/knowledge-core/ci-templates:v1.1.11@sha256:26af40ffdc6efdef4d8e7a6135d8e76f2326639cda9fa21c46af7477f6ebc0bc
+  BUILD_CPU_PERCENT: "75"
   KC_CACHE_ROOT: /opt/actions-runner/_cache/knowledge-core
   CI_PROJECT_CONFIG_JSON: >-
     {"project":"Knowledge-Core-Web","source_repo":"HappyLadySauceM/Knowledge-Core-Web","gitops_repo":"https://github.com/HappyLadySauceM/deploy.git","gitops_path":"Knowledge-Core-Web","gitops_kustomization":"dev/common/kustomization.yaml","gitops_branch":"main","shared_paths":[".github",".dockerignore","package.json","pnpm-lock.yaml","next.config.ts","tsconfig.json","eslint.config.mjs","vitest.config.ts","playwright.config.ts","postcss.config.mjs","docker","scripts","public","VERSION"],"harbor_registry":"harbor.happyladysauce.local","harbor_project":"knowledge-core","argocd_server":"argocd.happyladysauce.local","smoke_command":["./scripts/smoke.sh"],"release_model":"git-independent-service-aggregate","aggregate_release_prefix":"knowledge-core-web","aggregate_version_file":"VERSION","release_language":"zh-CN","deepseek_model":"deepseek-v4-flash","base_images":[{"source":"docker.m.daocloud.io/library/node:24.18.1-bookworm-slim@sha256:a09aabc645e86e81e23dab78e0c0f2eaa233cab4277c7188232181a1a8bd5d39","destination":"harbor.happyladysauce.local/knowledge-core/base/node:24.18.1-bookworm-slim"}],"services":[{"name":"web","source_path":"src","version_file":"VERSION","dockerfile":"docker/web/Dockerfile","context":".","image_repository":"harbor.happyladysauce.local/knowledge-core/web","deploy_snapshot":"deploy/web","kustomize_name":"knowledge-core-web"}]}
@@ -26,6 +27,11 @@ jobs:
     outputs:
       state_dir: ${{ steps.plan.outputs.state_dir }}
       services: ${{ steps.plan.outputs.services }}
+      build_services: ${{ steps.plan.outputs.build_services }}
+      deploy_services: ${{ steps.plan.outputs.deploy_services }}
+      release_services: ${{ steps.plan.outputs.release_services }}
+      deploy_changed: ${{ steps.plan.outputs.deploy_changed }}
+      has_build_changes: ${{ steps.plan.outputs.has_build_changes }}
       has_changes: ${{ steps.plan.outputs.has_changes }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -62,11 +68,36 @@ jobs:
             --base "$base" --details-file /state/changes.json)"
           echo "$changes"
           services="$(jq -r '.services | join(",")' <<<"$changes")"
+          build_services="$(jq -r '.build_services | join(",")' <<<"$changes")"
+          deploy_services="$(jq -r '.deploy_services | join(",")' <<<"$changes")"
+          release_services="$(jq -r '.release_services | join(",")' <<<"$changes")"
+          deploy_changed="$(jq -r '.deploy_changed' <<<"$changes")"
           has_changes=false
-          if [[ -n "$services" ]]; then has_changes=true; fi
+          has_build_changes=false
+          if [[ -n "$build_services" ]]; then has_build_changes=true; fi
+          if [[ -n "$services" || "$deploy_changed" == true ]]; then has_changes=true; fi
           echo "state_dir=$state_dir" >> "$GITHUB_OUTPUT"
           echo "services=$services" >> "$GITHUB_OUTPUT"
+          echo "build_services=$build_services" >> "$GITHUB_OUTPUT"
+          echo "deploy_services=$deploy_services" >> "$GITHUB_OUTPUT"
+          echo "release_services=$release_services" >> "$GITHUB_OUTPUT"
+          echo "deploy_changed=$deploy_changed" >> "$GITHUB_OUTPUT"
+          echo "has_build_changes=$has_build_changes" >> "$GITHUB_OUTPUT"
           echo "has_changes=$has_changes" >> "$GITHUB_OUTPUT"
+
+  deploy-verify:
+    needs: plan
+    if: needs.plan.outputs.deploy_changed == 'true'
+    runs-on: [self-hosted, Linux, X64, devops]
+    concurrency:
+      group: knowledge-core-web-dev-deploy-verify
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+      - name: Validate deployment overlay
+        run: kubectl kustomize deploy/web/overlay/dev >/dev/null
 
   release-preflight:
     needs: plan
@@ -119,7 +150,7 @@ jobs:
 
   web-verify-build:
     needs: plan
-    if: needs.plan.outputs.has_changes == 'true'
+    if: needs.plan.outputs.has_build_changes == 'true'
     uses: ./.github/workflows/ci.yml
     with:
       runner_label: devops
@@ -141,7 +172,7 @@ jobs:
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           STATE_DIR: ${{ needs.plan.outputs.state_dir }}
-          SERVICES: ${{ needs.plan.outputs.services }}
+          SERVICES: ${{ needs.plan.outputs.release_services }}
         run: |
           set -euo pipefail
           docker run --rm --network host \
@@ -152,7 +183,7 @@ jobs:
 
   package-candidates:
     needs: [plan, release-preflight, web-verify-build, release-notes]
-    if: always() && needs.plan.outputs.has_changes == 'true' && needs.release-preflight.result == 'success' && needs.web-verify-build.result == 'success' && needs.release-notes.result == 'success'
+    if: always() && needs.plan.outputs.has_build_changes == 'true' && needs.release-preflight.result == 'success' && needs.web-verify-build.result == 'success' && needs.release-notes.result == 'success'
     runs-on: [self-hosted, Linux, X64, devops]
     timeout-minutes: 30
     concurrency:
@@ -211,7 +242,7 @@ jobs:
             -v "$GITHUB_WORKSPACE:/workspace" -v "$socket:/var/run/docker.sock" \
             -v "$DOCKER_CONFIG:/root/.docker:ro" -v "$HARBOR_CA_FILE:/etc/harbor-ca/ca.crt:ro" \
             -v "$KC_CACHE_ROOT/buildx:/buildx" \
-            -e CI_PROJECT_CONFIG_JSON -e DOCKER_HOST=unix:///var/run/docker.sock \
+            -e CI_PROJECT_CONFIG_JSON -e BUILD_CPU_PERCENT -e DOCKER_HOST=unix:///var/run/docker.sock \
             -e DOCKER_CONFIG=/root/.docker -e BUILDX_CONFIG=/buildx \
             -e CI_REGISTRY_CA_FILE=/etc/harbor-ca/ca.crt -e SSL_CERT_FILE=/etc/harbor-ca/ca.crt \
             -w /workspace "$CI_IMAGE" build --service web --tag "sha-$GITHUB_SHA")"
@@ -225,8 +256,8 @@ jobs:
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
 
   deploy-release:
-    needs: [plan, release-preflight, web-verify-build, release-notes, package-candidates]
-    if: needs.package-candidates.result == 'success' && needs.release-notes.result == 'success'
+    needs: [plan, release-preflight, deploy-verify, web-verify-build, release-notes, package-candidates]
+    if: always() && needs.plan.outputs.has_changes == 'true' && needs.release-preflight.result == 'success' && (needs.deploy-verify.result == 'success' || needs.plan.outputs.deploy_changed == 'false') && (needs.web-verify-build.result == 'success' || needs.plan.outputs.has_build_changes == 'false') && needs.release-notes.result == 'success' && (needs.package-candidates.result == 'success' || needs.plan.outputs.has_build_changes == 'false')
     permissions:
       contents: write
       statuses: write
@@ -271,7 +302,9 @@ jobs:
           test -s "$STATE_DIR/harbor/ca.crt"
           test -s "$STATE_DIR/kubeconfig"
           [[ "$K3S_RELEASE_API_SERVER" == https://*:* ]]
-          [[ "$WEB_IMAGE_DIGEST" == sha256:* ]]
+          if [[ "${{ needs.plan.outputs.has_build_changes }}" == true ]]; then
+            [[ "$WEB_IMAGE_DIGEST" == sha256:* ]]
+          fi
           kube_context="$(kubectl --kubeconfig="$STATE_DIR/kubeconfig" config current-context)"
           kube_cluster="$(kubectl --kubeconfig="$STATE_DIR/kubeconfig" config view -o json | \
             jq -r --arg context "$kube_context" '.contexts[] | select(.name == $context) | .context.cluster')"
@@ -281,9 +314,13 @@ jobs:
           release_host="${K3S_RELEASE_API_SERVER#https://}"
           release_host="${release_host%:*}"
           test -n "$release_host"
-          jq -cn --arg digest "$WEB_IMAGE_DIGEST" \
-            '{"knowledge-core-web":{"newName":"harbor.happyladysauce.local/knowledge-core/web","digest":$digest}}' \
-            > "$STATE_DIR/overrides.json"
+          if [[ "${{ needs.plan.outputs.has_build_changes }}" == true ]]; then
+            jq -cn --arg digest "$WEB_IMAGE_DIGEST" \
+              '{"knowledge-core-web":{"newName":"harbor.happyladysauce.local/knowledge-core/web","digest":$digest}}' \
+              > "$STATE_DIR/overrides.json"
+          else
+            printf '{}\n' > "$STATE_DIR/overrides.json"
+          fi
           export KUBECONFIG="$STATE_DIR/kubeconfig"
           echo "STATE_DIR=$STATE_DIR" >> "$GITHUB_ENV"
           echo "DOCKER_CONFIG=$STATE_DIR/harbor" >> "$GITHUB_ENV"
@@ -302,7 +339,7 @@ jobs:
           result=""
           for attempt in 1 2 3; do
             if result="$(docker run --rm --network host -v "$GITHUB_WORKSPACE:/workspace" \
-              -e CI_PROJECT_CONFIG_JSON -e CI_GITOPS_IMAGE_OVERRIDES_JSON -e GITOPS_TOKEN \
+              -e CI_PROJECT_CONFIG_JSON -e BUILD_CPU_PERCENT -e CI_GITOPS_IMAGE_OVERRIDES_JSON -e GITOPS_TOKEN \
               -w /workspace "$CI_IMAGE" promote-snapshot --source-sha "$GITHUB_SHA")"; then
               break
             fi
@@ -340,8 +377,8 @@ jobs:
           done
           docker run --rm --network host -v "$GITHUB_WORKSPACE:/workspace" \
             -v "$KUBECONFIG:/secrets/kubeconfig:ro" \
-            -e CI_PROJECT_CONFIG_JSON -e CI_GITOPS_IMAGE_OVERRIDES_JSON -e KUBECONFIG=/secrets/kubeconfig \
-            -w /workspace "$CI_IMAGE" argo-wait --revision "$GITOPS_REVISION" --services web
+            -e CI_PROJECT_CONFIG_JSON -e BUILD_CPU_PERCENT -e CI_GITOPS_IMAGE_OVERRIDES_JSON -e KUBECONFIG=/secrets/kubeconfig \
+            -w /workspace "$CI_IMAGE" argo-wait --revision "$GITOPS_REVISION" --services "${{ needs.plan.outputs.release_services }}"
       - name: Run post-deploy smoke
         run: |
           set -euo pipefail
@@ -366,17 +403,19 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          socket="${DOCKER_HOST:-unix:///var/run/docker.sock}"
-          socket="${socket#unix://}"
-          docker run --rm --network host \
-            -v "$GITHUB_WORKSPACE:/workspace" -v "$socket:/var/run/docker.sock" \
-            -v "$DOCKER_CONFIG:/root/.docker" -v "$HARBOR_CA_FILE:/etc/harbor-ca/ca.crt:ro" \
-            -e CI_PROJECT_CONFIG_JSON -e DOCKER_HOST=unix:///var/run/docker.sock -e DOCKER_CONFIG=/root/.docker \
-            -e CI_REGISTRY_CA_FILE=/etc/harbor-ca/ca.crt -e SSL_CERT_FILE=/etc/harbor-ca/ca.crt \
-            -w /workspace "$CI_IMAGE" promote-candidate --service web --tag "sha-$GITHUB_SHA"
+          if [[ "${{ needs.plan.outputs.has_build_changes }}" == true ]]; then
+            socket="${DOCKER_HOST:-unix:///var/run/docker.sock}"
+            socket="${socket#unix://}"
+            docker run --rm --network host \
+              -v "$GITHUB_WORKSPACE:/workspace" -v "$socket:/var/run/docker.sock" \
+              -v "$DOCKER_CONFIG:/root/.docker" -v "$HARBOR_CA_FILE:/etc/harbor-ca/ca.crt:ro" \
+              -e CI_PROJECT_CONFIG_JSON -e BUILD_CPU_PERCENT -e DOCKER_HOST=unix:///var/run/docker.sock -e DOCKER_CONFIG=/root/.docker \
+              -e CI_REGISTRY_CA_FILE=/etc/harbor-ca/ca.crt -e SSL_CERT_FILE=/etc/harbor-ca/ca.crt \
+              -w /workspace "$CI_IMAGE" promote-candidate --service web --tag "sha-$GITHUB_SHA"
+          fi
           docker run --rm --network host -v "$GITHUB_WORKSPACE:/workspace" -v "$STATE_DIR:/state" \
             -e CI_PROJECT_CONFIG_JSON -e GITHUB_TOKEN -e CI_RELEASE_CHANGES_FILE=/state/changes.json \
-            -w /workspace "$CI_IMAGE" release --services web --changes-file /state/changes.json --summary-file /state/release.md
+            -w /workspace "$CI_IMAGE" release --services "${{ needs.plan.outputs.release_services }}" --changes-file /state/changes.json --summary-file /state/release.md
       - name: Roll back failed GitOps snapshot
         if: failure() && env.GITOPS_REVISION != '' && env.GITOPS_REVISION != env.GITOPS_BASE_REVISION
         env:
@@ -400,7 +439,7 @@ jobs:
             --target-url "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
   cleanup:
-    needs: [plan, release-preflight, web-verify-build, release-notes, package-candidates, deploy-release]
+    needs: [plan, release-preflight, deploy-verify, web-verify-build, release-notes, package-candidates, deploy-release]
     if: always()
     runs-on: [self-hosted, Linux, X64, devops]
     timeout-minutes: 10

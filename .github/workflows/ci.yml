@@ -15,6 +15,9 @@ on:
 permissions:
   contents: read
 
+env:
+  BUILD_CPU_PERCENT: "75"
+
 concurrency:
   group: web-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
