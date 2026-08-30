@@ -14,7 +14,7 @@ env:
   CI_IMAGE: harbor.happyladysauce.local/knowledge-core/ci-templates:v1.1.11@sha256:26af40ffdc6efdef4d8e7a6135d8e76f2326639cda9fa21c46af7477f6ebc0bc
   BUILD_CPU_PERCENT: "75"
   CI_PROJECT_CONFIG_JSON: >-
-    {"project":"Knowledge-Core-Web","source_repo":"HappyLadySauceM/Knowledge-Core-Web","gitops_repo":"https://github.com/HappyLadySauceM/deploy.git","gitops_path":"Knowledge-Core-Web","gitops_kustomization":"dev/common/kustomization.yaml","gitops_branch":"main","shared_paths":[".github",".dockerignore","package.json","pnpm-lock.yaml","next.config.ts","tsconfig.json","eslint.config.mjs","vitest.config.ts","playwright.config.ts","postcss.config.mjs","docker","scripts","public","VERSION"],"harbor_registry":"harbor.happyladysauce.local","harbor_project":"knowledge-core","argocd_server":"argocd.happyladysauce.local","smoke_command":["./scripts/smoke.sh"],"release_model":"git-independent-service-aggregate","aggregate_release_prefix":"knowledge-core-web","aggregate_version_file":"VERSION","release_language":"zh-CN","deepseek_model":"deepseek-v4-flash","base_images":[{"source":"docker.m.daocloud.io/library/node:24.18.1-bookworm-slim@sha256:a09aabc645e86e81e23dab78e0c0f2eaa233cab4277c7188232181a1a8bd5d39","destination":"harbor.happyladysauce.local/knowledge-core/base/node:24.18.1-bookworm-slim"}],"services":[{"name":"web","source_path":"src","version_file":"VERSION","dockerfile":"docker/web/Dockerfile","context":".","image_repository":"harbor.happyladysauce.local/knowledge-core/web","deploy_snapshot":"deploy/web","kustomize_name":"knowledge-core-web"}]}
+    {"project":"Knowledge-Core-Web","source_repo":"HappyLadySauceM/Knowledge-Core-Web","gitops_repo":"https://github.com/HappyLadySauceM/deploy.git","gitops_path":"Knowledge-Core-Web","gitops_kustomization":"dev/common/kustomization.yaml","gitops_branch":"main","shared_paths":[".github",".dockerignore","package.json","pnpm-lock.yaml",".npmrc","next.config.ts","tsconfig.json","eslint.config.mjs","vitest.config.ts","playwright.config.ts","postcss.config.mjs","docker","scripts","public","VERSION"],"harbor_registry":"harbor.happyladysauce.local","harbor_project":"knowledge-core","argocd_server":"argocd.happyladysauce.local","smoke_command":["./scripts/smoke.sh"],"release_model":"git-independent-service-aggregate","aggregate_release_prefix":"knowledge-core-web","aggregate_version_file":"VERSION","release_language":"zh-CN","deepseek_model":"deepseek-v4-flash","base_images":[{"source":"docker.m.daocloud.io/library/node:24.18.1-bookworm-slim@sha256:a09aabc645e86e81e23dab78e0c0f2eaa233cab4277c7188232181a1a8bd5d39","destination":"harbor.happyladysauce.local/knowledge-core/base/node:24.18.1-bookworm-slim"}],"services":[{"name":"web","source_path":"src","version_file":"VERSION","dockerfile":"docker/web/Dockerfile","context":".","image_repository":"harbor.happyladysauce.local/knowledge-core/web","deploy_snapshot":"deploy/web","kustomize_name":"knowledge-core-web"}]}
 
 jobs:
   plan:
@@ -64,6 +64,8 @@ jobs:
               --user "$(id -u):$(id -g)" \
               --group-add "$(stat -c '%g' "$socket")" \
               -e HOME="${RUNNER_TEMP:-/tmp}" \
+              -e HTTP_PROXY -e HTTPS_PROXY -e NO_PROXY \
+              -e http_proxy -e https_proxy -e no_proxy \
               "$@"
           }
           state_dir="$KC_CACHE_ROOT/runs/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
@@ -193,6 +195,8 @@ jobs:
               --user "$(id -u):$(id -g)" \
               --group-add "$(stat -c '%g' "$socket")" \
               -e HOME="${RUNNER_TEMP:-/tmp}" \
+              -e HTTP_PROXY -e HTTPS_PROXY -e NO_PROXY \
+              -e http_proxy -e https_proxy -e no_proxy \
               "$@"
           }
           ci_run \
@@ -265,6 +269,8 @@ jobs:
               --user "$(id -u):$(id -g)" \
               --group-add "$(stat -c '%g' "$socket")" \
               -e HOME="${RUNNER_TEMP:-/tmp}" \
+              -e HTTP_PROXY -e HTTPS_PROXY -e NO_PROXY \
+              -e http_proxy -e https_proxy -e no_proxy \
               "$@"
           }
           result="$(ci_run \
@@ -372,6 +378,8 @@ jobs:
               --user "$(id -u):$(id -g)" \
               --group-add "$(stat -c '%g' "$socket")" \
               -e HOME="${RUNNER_TEMP:-/tmp}" \
+              -e HTTP_PROXY -e HTTPS_PROXY -e NO_PROXY \
+              -e http_proxy -e https_proxy -e no_proxy \
               "$@"
           }
           result=""
@@ -403,6 +411,8 @@ jobs:
               --user "$(id -u):$(id -g)" \
               --group-add "$(stat -c '%g' "$socket")" \
               -e HOME="${RUNNER_TEMP:-/tmp}" \
+              -e HTTP_PROXY -e HTTPS_PROXY -e NO_PROXY \
+              -e http_proxy -e https_proxy -e no_proxy \
               "$@"
           }
           ci_run -v "$GITHUB_WORKSPACE:/workspace" \
@@ -419,6 +429,8 @@ jobs:
               --user "$(id -u):$(id -g)" \
               --group-add "$(stat -c '%g' "$socket")" \
               -e HOME="${RUNNER_TEMP:-/tmp}" \
+              -e HTTP_PROXY -e HTTPS_PROXY -e NO_PROXY \
+              -e http_proxy -e https_proxy -e no_proxy \
               "$@"
           }
           for attempt in 1 2 3 4 5 6; do
@@ -446,6 +458,8 @@ jobs:
               --user "$(id -u):$(id -g)" \
               --group-add "$(stat -c '%g' "$socket")" \
               -e HOME="${RUNNER_TEMP:-/tmp}" \
+              -e HTTP_PROXY -e HTTPS_PROXY -e NO_PROXY \
+              -e http_proxy -e https_proxy -e no_proxy \
               "$@"
           }
           ci_run --entrypoint /bin/bash \
@@ -468,6 +482,8 @@ jobs:
               --user "$(id -u):$(id -g)" \
               --group-add "$(stat -c '%g' "$socket")" \
               -e HOME="${RUNNER_TEMP:-/tmp}" \
+              -e HTTP_PROXY -e HTTPS_PROXY -e NO_PROXY \
+              -e http_proxy -e https_proxy -e no_proxy \
               "$@"
           }
           ci_run -v "$GITHUB_WORKSPACE:/workspace" \
@@ -486,6 +502,8 @@ jobs:
               --user "$(id -u):$(id -g)" \
               --group-add "$(stat -c '%g' "$socket")" \
               -e HOME="${RUNNER_TEMP:-/tmp}" \
+              -e HTTP_PROXY -e HTTPS_PROXY -e NO_PROXY \
+              -e http_proxy -e https_proxy -e no_proxy \
               "$@"
           }
           if [[ "${{ needs.plan.outputs.has_build_changes }}" == true ]]; then
@@ -516,6 +534,8 @@ jobs:
               --user "$(id -u):$(id -g)" \
               --group-add "$(stat -c '%g' "$socket")" \
               -e HOME="${RUNNER_TEMP:-/tmp}" \
+              -e HTTP_PROXY -e HTTPS_PROXY -e NO_PROXY \
+              -e http_proxy -e https_proxy -e no_proxy \
               "$@"
           }
           ci_run -v "$GITHUB_WORKSPACE:/workspace" \
@@ -534,6 +554,8 @@ jobs:
               --user "$(id -u):$(id -g)" \
               --group-add "$(stat -c '%g' "$socket")" \
               -e HOME="${RUNNER_TEMP:-/tmp}" \
+              -e HTTP_PROXY -e HTTPS_PROXY -e NO_PROXY \
+              -e http_proxy -e https_proxy -e no_proxy \
               "$@"
           }
           ci_run -v "$GITHUB_WORKSPACE:/workspace" \

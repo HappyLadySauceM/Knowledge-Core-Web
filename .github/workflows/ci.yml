@@ -35,11 +35,31 @@ jobs:
         with:
           version: 10.31.0
 
+      # Self-hosted restores of GitHub Actions cache stall on
+      # results.actions.githubusercontent.com; keep a runner-local store instead.
+      # 自托管恢复 GitHub Actions 缓存会在 results.actions.githubusercontent.com 上卡死；改用 runner 本地 store。
+      - name: Use runner-local pnpm store
+        if: runner.environment == 'self-hosted'
+        run: |
+          set -euo pipefail
+          store="$(cd "$GITHUB_WORKSPACE/../.." && pwd)/_cache/knowledge-core/pnpm-store"
+          mkdir -p "$store"
+          echo "npm_config_store_dir=$store" >> "$GITHUB_ENV"
+
       - name: Setup Node
+        if: runner.environment != 'self-hosted'
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24.18.1
           cache: pnpm
+          mirror: https://cdn.npmmirror.com/binaries/node
+
+      - name: Setup Node on self-hosted
+        if: runner.environment == 'self-hosted'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.18.1
+          mirror: https://cdn.npmmirror.com/binaries/node
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -62,6 +82,8 @@ jobs:
 
       - name: Install Playwright browser
         if: runner.environment == 'self-hosted'
+        env:
+          PLAYWRIGHT_DOWNLOAD_HOST: https://cdn.npmmirror.com/binaries/playwright
         run: pnpm exec playwright install chromium
 
       - name: End-to-end tests

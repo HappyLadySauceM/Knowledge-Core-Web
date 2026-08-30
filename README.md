@@ -11,6 +11,8 @@ pnpm install
 pnpm dev
 ```
 
+依赖与 Node 发行包走 npmmirror（淘宝镜像）：仓库 `.npmrc` 指向 `https://registry.npmmirror.com`，CI 的 `actions/setup-node` 使用 `https://cdn.npmmirror.com/binaries/node`。自托管 runner 不恢复 GitHub Actions 的 pnpm 缓存（该下载会在 `results.actions.githubusercontent.com` 上卡死），改为 runner 本地 `_cache/knowledge-core/pnpm-store`。
+
 访问 `/zh-CN` 或 `/en`。主题默认跟随系统，也可以在右上角手动切换。
 
 ## 质量门禁

@@ -5,7 +5,7 @@ FROM ${NODE_BASE_IMAGE} AS deps
 WORKDIR /app
 ENV COREPACK_HOME=/tmp/corepack
 RUN corepack enable && corepack install --global pnpm@10.31.0
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml .npmrc ./
 RUN pnpm install --frozen-lockfile
 
 FROM deps AS builder
