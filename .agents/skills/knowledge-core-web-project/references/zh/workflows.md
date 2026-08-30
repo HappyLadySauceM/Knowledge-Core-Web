@@ -2,9 +2,14 @@
 
 # Knowledge-Core-Web: 工作流
 
-在现有分支上工作。所有 Node 命令使用 pnpm。本地开发是 `pnpm dev`。生产启动是在 `pnpm build` 后执行 `pnpm start`。命令对照表仍在生成的工作流附录中。
+## `workflows.development`
 
-<!-- fact:workflows.development status:verified sources:detected:project-scripts, user-confirmed, user-confirmed-development-commands -->
+状态：`verified`
+
+- **npm:dev**: `{"command":"next dev","source":"package.json"}`
+- **npm:start**: `{"command":"next start","source":"package.json"}`
+
+来源： `detected:project-scripts`, `package.json`, `user-confirmed`, `user-confirmed-development-commands`
 
 公开 PR 和 main 验证继续使用 GitHub-hosted runner。推送到 dev 的受信任发布链路运行在组织级 self-hosted runner 标签 `devops`：以 runner 有效 CPU（CPU 亲和性与 cgroup 配额）的 75% 设置并行度，构建不可变 Harbor 镜像，更新 GitOps 中由源码维护的部署快照，同步 Argo dev，运行冒烟检查，然后通过快进 main 并发布来提升。`BUILD_CPU_PERCENT` 可调整比例，`BUILD_JOBS` 仅作为有界的紧急覆盖。Knowledge-Core-Web/deploy 是可编辑的部署源，CI 会自动将其同步到 HappyLadySauceM/deploy/Knowledge-Core-Web；仅修改部署时跳过镜像构建，但仍校验 overlay、更新 GitOps、等待 Argo、运行冒烟并提升 main。self-hosted 清理只处理单次运行状态和专用 Buildx 缓存。失败支持回滚，且禁止强制推送。
 

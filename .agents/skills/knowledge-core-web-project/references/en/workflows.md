@@ -2,9 +2,14 @@
 
 # Knowledge-Core-Web: Workflows
 
-Work on the existing branch. Use pnpm for all Node commands. Local development is `pnpm dev`. Production start is `pnpm start` after `pnpm build`. Command tables remain in the generated workflow appendix.
+## `workflows.development`
 
-<!-- fact:workflows.development status:verified sources:detected:project-scripts, user-confirmed, user-confirmed-development-commands -->
+Status: `verified`
+
+- **npm:dev**: `{"command":"next dev","source":"package.json"}`
+- **npm:start**: `{"command":"next start","source":"package.json"}`
+
+Sources: `detected:project-scripts`, `package.json`, `user-confirmed`, `user-confirmed-development-commands`
 
 Public PR and main verification remain on GitHub-hosted runners. Pushes to dev run the trusted release chain on the organization self-hosted runner label `devops`: build immutable Harbor images with parallelism set to 75% of effective runner CPUs (affinity and cgroup quota), update the source-owned deploy snapshot in GitOps, sync Argo dev, run smoke checks, then promote by fast-forwarding main and releasing. `BUILD_CPU_PERCENT` changes the ratio and `BUILD_JOBS` is only a bounded emergency override. Knowledge-Core-Web/deploy is the editable deployment source and CI synchronizes it automatically to HappyLadySauceM/deploy/Knowledge-Core-Web; deploy-only changes skip image builds while still validating the overlay, updating GitOps, waiting for Argo, running smoke, and promoting main. The self-hosted cleanup is restricted to per-run state and the dedicated Buildx cache. Failures support rollback, and force-push is forbidden.
 
@@ -23,7 +28,7 @@ Status: `verified`
 - **npm:build**: `{"command":"next build","source":"package.json"}`
 - **npm:build-storybook**: `{"command":"storybook build","source":"package.json"}`
 
-Sources: `detected:project-scripts`
+Sources: `detected:project-scripts`, `package.json`
 
 ## `workflows.test`
 
@@ -32,7 +37,7 @@ Status: `verified`
 - **npm:test**: `{"command":"vitest run","source":"package.json"}`
 - **npm:test:watch**: `{"command":"vitest","source":"package.json"}`
 
-Sources: `detected:project-scripts`
+Sources: `detected:project-scripts`, `package.json`
 
 ## `workflows.quality`
 
@@ -41,7 +46,7 @@ Status: `verified`
 - **npm:lint**: `{"command":"eslint .","source":"package.json"}`
 - **npm:typecheck**: `{"command":"tsc --noEmit","source":"package.json"}`
 
-Sources: `detected:project-scripts`
+Sources: `detected:project-scripts`, `package.json`
 
 ## `cicd.config-files`
 

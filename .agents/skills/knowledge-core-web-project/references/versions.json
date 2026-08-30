@@ -19,8 +19,8 @@
       "zhDigest": "d8a26b0344c266138f83a05d85463cfc894e7b0cf04d2ee982fa5f58860957d1"
     },
     "environment": {
-      "enDigest": "e60eee58bbd3a8eb6c2d618c9169ee24bdf9c557695afedf87214b60d0f43fdc",
-      "syncedEnDigest": "e60eee58bbd3a8eb6c2d618c9169ee24bdf9c557695afedf87214b60d0f43fdc",
+      "enDigest": "15627e8416f4c223a30ad95181bd1806796e18483ff074f8e7b020431fd0af7d",
+      "syncedEnDigest": "15627e8416f4c223a30ad95181bd1806796e18483ff074f8e7b020431fd0af7d",
       "syncedZhDigest": "98b0a77b141bd3846aa2b2d9a9ffe0f9b4eb509f7fbcddb55f779566febee952",
       "zhDigest": "98b0a77b141bd3846aa2b2d9a9ffe0f9b4eb509f7fbcddb55f779566febee952"
     },
@@ -31,10 +31,10 @@
       "zhDigest": "4f1300640b2c2c9162981c332aabf77a5b2daddea0f458399eaabd4bce188412"
     },
     "workflows": {
-      "enDigest": "28bc1ebb2d979dd8bee2555ba18d29f62cbeba0033b923b8161e682f34a37ef2",
-      "syncedEnDigest": "28bc1ebb2d979dd8bee2555ba18d29f62cbeba0033b923b8161e682f34a37ef2",
-      "syncedZhDigest": "2f32511ed5c721660357d396637f87a4c144ed32da763ac8690f7c92500e2719",
-      "zhDigest": "2f32511ed5c721660357d396637f87a4c144ed32da763ac8690f7c92500e2719"
+      "enDigest": "742ea2a65f27fd4cd4d2f3f9f9ee61eaa3289ab13641779f63eae8367e8f0140",
+      "syncedEnDigest": "742ea2a65f27fd4cd4d2f3f9f9ee61eaa3289ab13641779f63eae8367e8f0140",
+      "syncedZhDigest": "944f2ed9806317d40adfb70360d66aaabb477572449a002bf46df85b8d67f168",
+      "zhDigest": "944f2ed9806317d40adfb70360d66aaabb477572449a002bf46df85b8d67f168"
     }
   },
   "schemaVersion": 1,

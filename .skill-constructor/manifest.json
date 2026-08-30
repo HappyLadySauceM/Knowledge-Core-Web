@@ -335,6 +335,49 @@
       "value": "Use strict TypeScript and ESLint. Validate with Vitest, Playwright, production build, and Storybook. Keep Gateway access on the server. Do not put session credentials in client code, cookies readable by JavaScript, or logs."
     },
     {
+      "id": "documents.managed",
+      "revision": 25,
+      "section": "documents",
+      "sources": [
+        {
+          "kind": "user",
+          "reference": "user-confirmed-managed-documents"
+        }
+      ],
+      "status": "verified",
+      "updatedAt": "2026-08-30T10:43:08Z",
+      "value": [
+        {
+          "domains": [
+            "constraints",
+            "conventions",
+            "workflows"
+          ],
+          "path": "AGENTS.md",
+          "purpose": "Host-facing Next.js and Skill Constructor instructions; preserve both generated Next.js and Skill Constructor managed blocks."
+        },
+        {
+          "domains": [
+            "constraints",
+            "conventions"
+          ],
+          "path": "CLAUDE.md",
+          "purpose": "Claude Code entrypoint that delegates project rules to AGENTS.md; keep it as @AGENTS.md."
+        },
+        {
+          "domains": [
+            "architecture",
+            "conventions",
+            "environment",
+            "services",
+            "workflows"
+          ],
+          "path": "README.md",
+          "purpose": "Public implemented product surface, BFF boundaries, setup, quality, and delivery workflows."
+        }
+      ]
+    },
+    {
       "id": "entrypoints.catalog",
       "revision": 20,
       "section": "services",
@@ -410,16 +453,20 @@
     },
     {
       "id": "environment.toolchains",
-      "revision": 18,
+      "revision": 33,
       "section": "environment",
       "sources": [
         {
           "kind": "detected",
           "reference": "detected:toolchain-manifests"
+        },
+        {
+          "kind": "documented",
+          "reference": "package.json"
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-08-27T12:48:24Z",
+      "updatedAt": "2026-08-30T10:49:11Z",
       "value": [
         {
           "manifest": "package.json",
@@ -519,16 +566,20 @@
     },
     {
       "id": "workflows.build",
-      "revision": 18,
+      "revision": 33,
       "section": "workflows",
       "sources": [
         {
           "kind": "detected",
           "reference": "detected:project-scripts"
+        },
+        {
+          "kind": "documented",
+          "reference": "package.json"
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-08-27T12:48:24Z",
+      "updatedAt": "2026-08-30T10:49:11Z",
       "value": {
         "npm:build": {
           "command": "next build",
@@ -542,12 +593,16 @@
     },
     {
       "id": "workflows.development",
-      "revision": 23,
+      "revision": 33,
       "section": "workflows",
       "sources": [
         {
           "kind": "detected",
           "reference": "detected:project-scripts"
+        },
+        {
+          "kind": "documented",
+          "reference": "package.json"
         },
         {
           "kind": "user",
@@ -559,21 +614,34 @@
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-08-28T04:49:07Z",
-      "value": "Work on the existing branch. Use pnpm for all Node commands. Local development is `pnpm dev`. Production start is `pnpm start` after `pnpm build`. Command tables remain in the generated workflow appendix."
+      "updatedAt": "2026-08-30T10:49:11Z",
+      "value": {
+        "npm:dev": {
+          "command": "next dev",
+          "source": "package.json"
+        },
+        "npm:start": {
+          "command": "next start",
+          "source": "package.json"
+        }
+      }
     },
     {
       "id": "workflows.quality",
-      "revision": 18,
+      "revision": 33,
       "section": "workflows",
       "sources": [
         {
           "kind": "detected",
           "reference": "detected:project-scripts"
+        },
+        {
+          "kind": "documented",
+          "reference": "package.json"
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-08-27T12:48:24Z",
+      "updatedAt": "2026-08-30T10:49:11Z",
       "value": {
         "npm:lint": {
           "command": "eslint .",
@@ -587,16 +655,20 @@
     },
     {
       "id": "workflows.test",
-      "revision": 18,
+      "revision": 33,
       "section": "workflows",
       "sources": [
         {
           "kind": "detected",
           "reference": "detected:project-scripts"
+        },
+        {
+          "kind": "documented",
+          "reference": "package.json"
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-08-27T12:48:24Z",
+      "updatedAt": "2026-08-30T10:49:11Z",
       "value": {
         "npm:test": {
           "command": "vitest run",
@@ -611,7 +683,7 @@
   ],
   "generator": {
     "name": "skill-constructor",
-    "version": "0.7.0"
+    "version": "0.8.0"
   },
   "project": {
     "language": "en",
@@ -619,11 +691,11 @@
     "profile": "generic",
     "slug": "knowledge-core-web"
   },
-  "revision": 24,
+  "revision": 34,
   "scan": {
-    "fingerprint": "d97554a791e9e7c04a97598e2a07a59305ab2a411de5a37d6ae14bead2318490",
-    "inventoryCount": 82
+    "fingerprint": "6a29d5f541de00447266aa17a2c252295da1f2ab26a3d7777f8115183977b772",
+    "inventoryCount": 83
   },
   "schemaVersion": 3,
-  "updatedAt": "2026-08-29T05:03:07Z"
+  "updatedAt": "2026-08-30T10:49:29Z"
 }

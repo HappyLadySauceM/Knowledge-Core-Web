@@ -1,6 +1,6 @@
 # Knowledge Core Web
 
-Knowledge Core 的桌面优先、响应式 Web 前端。当前阶段建立 Next.js App Router 基线与设计系统，后续按 core → media → AI → community 逐步接入 Knowledge-Core Gateway。
+Knowledge Core 的桌面优先、响应式 Web 前端。当前实现包含 Next.js App Router UI、设计系统，以及通过 HttpOnly cookie 管理会话的同源 BFF；文档、文件夹、协作等业务能力将按 core → media → AI → community 逐步接入 Knowledge-Core Gateway。
 
 产品决策、技术边界和执行状态见 [docs/README.md](./docs/README.md)。
 
@@ -28,6 +28,6 @@ pnpm build-storybook
 
 ## 边界约定
 
-- 浏览器不直接持有 access/refresh token；认证接入阶段通过 BFF HttpOnly cookie 与 Gateway 通信。
+- 浏览器不直接持有 access/refresh token；认证与 Gateway 请求通过同源 BFF 转换为 HttpOnly cookie 会话。
 - `src/lib/api/types.ts` 只描述稳定的前后端契约；`gateway.ts` 是唯一的 Gateway 请求入口。
 - Studio 当前是可预览的工作区壳，文档、文件夹与协作能力将在后续阶段接入。

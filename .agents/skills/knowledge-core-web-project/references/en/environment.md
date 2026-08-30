@@ -44,7 +44,7 @@ Status: `verified`
 
 - `{"manifest":"package.json","toolchain":"node"}`
 
-Sources: `detected:toolchain-manifests`
+Sources: `detected:toolchain-manifests`, `package.json`
 
 ## `identity.project-name`
 

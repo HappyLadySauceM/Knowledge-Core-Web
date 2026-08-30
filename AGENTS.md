@@ -30,6 +30,8 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - Keep `.skill-constructor/manifest.json` and the generated project Skill directory under version
   control, and include their synchronized updates with the related engineering commit unless this
   repository records a verified manifest exception.
+- When the generated project Skill lists managed project documents, review and synchronize those
+  whose configured domains intersect the completed task; they remain human-editable files.
 - Never edit generated English project-skill files or stage, commit, or push harness updates without
   an explicit user request.
 <!-- skill-constructor:end -->
