@@ -18,7 +18,7 @@ export function AuthForm({ locale, mode }: { locale: string; mode: AuthMode }) {
     setPending(true); setError("");
     const form = new FormData(event.currentTarget);
     const payload = isRegister ? { username: form.get("username"), email: form.get("email"), password: form.get("password") } : { identifier: form.get("identifier"), password: form.get("password") };
-    const response = await fetch(`/api/auth/${mode}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
+    const response = await fetch(`/api/bff/auth/${mode}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
     const data = await response.json().catch(() => ({}));
     setPending(false);
     if (!response.ok) { setError(data.detail ?? data.title ?? "Something went wrong."); return; }

@@ -3,16 +3,20 @@
   "facts": [
     {
       "id": "architecture.design",
-      "revision": 20,
+      "revision": 37,
       "section": "architecture",
       "sources": [
         {
           "kind": "documented",
           "reference": "docs/technical-plan.md"
+        },
+        {
+          "kind": "user",
+          "reference": "user-confirmed-web-bff-session-layer"
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-08-27T12:52:39Z",
+      "updatedAt": "2026-08-30T14:36:53Z",
       "value": {
         "containers": [
           {
@@ -22,8 +26,8 @@
           },
           {
             "name": "BFF routes",
-            "responsibility": "HttpOnly session cookies and Gateway HTTP proxy",
-            "technology": "Next.js Route Handlers on the server"
+            "responsibility": "HttpOnly session cookies, Gateway HTTP proxy, refresh policy, and browser security boundary",
+            "technology": "Next.js Route Handlers with the shared src/lib/bff server layer"
           },
           {
             "name": "Standalone Node process",
@@ -112,16 +116,24 @@
               "Two replicas still share no in-process session store beyond cookies",
               "Gateway availability is verified by smoke, not by /api/health"
             ]
+          },
+          {
+            "name": "Centralized server-side session layer",
+            "rationale": "Cookie handling, refresh rotation, origin checks, retries, and Gateway proxying are maintained in one server-only boundary while Gateway remains the only Knowledge-Core edge.",
+            "tradeoffs": [
+              "Web-facing BFF paths are owned and versioned with the Web application",
+              "The Next.js runtime remains required for authenticated browser requests"
+            ]
           }
         ],
         "format": "structured-v1",
         "keyFlows": [
           {
-            "description": "The browser posts to /api/auth/login. The BFF calls Gateway /api/v1/sessions, then sets HttpOnly cookies kc_access and kc_refresh and returns only the user projection.",
+            "description": "The browser posts to /api/bff/auth/login. The BFF calls Gateway /api/v1/sessions, then sets HttpOnly cookies kc_access and kc_refresh and returns only the user projection.",
             "name": "Login and session cookies"
           },
           {
-            "description": "The browser calls /api/gateway/*. The BFF forwards method, body, and selected tracing headers, attaching the session cookie as the Gateway Authorization header.",
+            "description": "The browser calls /api/bff/gateway/*. The BFF forwards method, body, and selected tracing headers, attaching the session cookie as the Gateway Authorization header.",
             "name": "Authenticated Gateway proxy"
           },
           {
@@ -139,7 +151,7 @@
             "name": "BFF owns browser sessions"
           },
           {
-            "description": "Server code reaches Knowledge-Core only through src/lib/api/gateway.ts and the /api/gateway proxy; pages do not scatter fetch calls.",
+            "description": "Server code reaches Knowledge-Core only through src/lib/api/gateway.ts for server-rendered data and the shared src/lib/bff/gateway.ts for the /api/bff/gateway proxy; pages do not scatter fetch calls.",
             "name": "Single Gateway client"
           },
           {
@@ -267,9 +279,17 @@
     },
     {
       "id": "cicd.pipeline",
-      "revision": 24,
+      "revision": 45,
       "section": "workflows",
       "sources": [
+        {
+          "kind": "detected",
+          "reference": ".github/workflows/ci.yml"
+        },
+        {
+          "kind": "detected",
+          "reference": ".github/workflows/pipeline.yml"
+        },
         {
           "kind": "user",
           "reference": "user-confirmed"
@@ -284,8 +304,8 @@
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-08-29T05:03:07Z",
-      "value": "Public PR and main verification remain on GitHub-hosted runners. Pushes to dev run the trusted release chain on the organization self-hosted runner label `devops`: build immutable Harbor images with parallelism set to 75% of effective runner CPUs (affinity and cgroup quota), update the source-owned deploy snapshot in GitOps, sync Argo dev, run smoke checks, then promote by fast-forwarding main and releasing. `BUILD_CPU_PERCENT` changes the ratio and `BUILD_JOBS` is only a bounded emergency override. Knowledge-Core-Web/deploy is the editable deployment source and CI synchronizes it automatically to HappyLadySauceM/deploy/Knowledge-Core-Web; deploy-only changes skip image builds while still validating the overlay, updating GitOps, waiting for Argo, running smoke, and promoting main. The self-hosted cleanup is restricted to per-run state and the dedicated Buildx cache. Failures support rollback, and force-push is forbidden."
+      "updatedAt": "2026-08-31T06:03:25Z",
+      "value": "Public PR and main verification remain on GitHub-hosted runners. Pushes to dev run the trusted release chain on the organization self-hosted runner label `devops`: build immutable Harbor images with parallelism set to 75% of effective runner CPUs (affinity and cgroup quota), update the source-owned deploy snapshot in GitOps, sync Argo dev, run smoke checks, then promote by fast-forwarding main and releasing. `BUILD_CPU_PERCENT` changes the ratio and `BUILD_JOBS` is only a bounded emergency override. Control-image containers run as the current runner UID and GID (`docker run --user $(id -u):$(id -g)` with a writable HOME); Docker config is mounted at `/ci/docker` rather than `/root/.docker`; runner cache is `$GITHUB_WORKSPACE/../../_cache/knowledge-core`. The host runner uses systemd `HTTP_PROXY=http://127.0.0.1:10991` (sing-box HTTP inbound) with `NO_PROXY` for Harbor, cluster, and npmmirror, and `NODE_USE_ENV_PROXY=1` so Node 24 actions including `create-github-app-token` post honor that proxy; `ci_run` forwards proxy variables into the control image. Self-hosted Node/pnpm/Playwright downloads use npmmirror (`cdn.npmmirror.com` / `registry.npmmirror.com`) and do not restore GitHub Actions package caches. Knowledge-Core-Web/deploy is the editable deployment source and CI synchronizes it automatically to HappyLadySauceM/deploy/Knowledge-Core-Web; deploy-only changes skip image builds while still validating the overlay, updating GitOps, waiting for Argo, running smoke, and promoting main. The self-hosted cleanup is restricted to per-run state and the dedicated Buildx cache. Failures support rollback, and force-push is forbidden."
     },
     {
       "id": "constraints.project",
@@ -303,7 +323,7 @@
     },
     {
       "id": "conventions.code-layout",
-      "revision": 20,
+      "revision": 35,
       "section": "conventions",
       "sources": [
         {
@@ -314,11 +334,15 @@
         {
           "kind": "user",
           "reference": "user-confirmed"
+        },
+        {
+          "kind": "user",
+          "reference": "user-confirmed-web-bff-session-layer"
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-08-27T12:52:39Z",
-      "value": "src/app owns App Router pages, layouts, and BFF route handlers.\nsrc/components owns UI and studio shells.\nsrc/lib owns i18n, the Gateway client, and collaboration helpers.\ndeploy/web owns Kustomize base and overlays.\ndocker owns the production image.\nscripts owns smoke checks.\ne2e owns Playwright specs.\ndocs owns product and technical decisions.\nstorybook-static, test-results, playwright-report, and .next are generated outputs."
+      "updatedAt": "2026-08-30T14:32:23Z",
+      "value": "src/app owns App Router pages, layouts, and BFF route handlers.\nsrc/components owns UI and studio shells.\nsrc/lib owns i18n, the Gateway client, the shared BFF session/proxy layer, and collaboration helpers.\ndeploy/web owns Kustomize base and overlays.\ndocker owns the production image.\nscripts owns smoke checks.\ne2e owns Playwright specs.\ndocs owns product and technical decisions.\nstorybook-static, test-results, playwright-report, and .next are generated outputs."
     },
     {
       "id": "conventions.code-style",
@@ -435,9 +459,44 @@
     },
     {
       "id": "environment.setup",
-      "revision": 20,
+      "revision": 43,
       "section": "environment",
       "sources": [
+        {
+          "kind": "detected",
+          "reference": ".npmrc"
+        },
+        {
+          "detail": "evidence-sha256:e5d420ee4e9d0e8d3549a92c220967e8e0049fe744f564ae103050874a37f4de",
+          "kind": "documented",
+          "reference": "README.md#section"
+        },
+        {
+          "kind": "documented",
+          "reference": "package.json"
+        },
+        {
+          "kind": "user",
+          "reference": "user-confirmed"
+        },
+        {
+          "kind": "user",
+          "reference": "user-confirmed-web-bff-session-layer"
+        }
+      ],
+      "status": "verified",
+      "updatedAt": "2026-08-30T15:21:36Z",
+      "value": "Use Node.js 24.18.1 (CI pin; package engines allow >=20.9.0) and pnpm 10.31.0. Install with `pnpm install --frozen-lockfile`. Package tarballs use npmmirror via `.npmrc` (`registry=https://registry.npmmirror.com`). Self-hosted CI downloads Node from `https://cdn.npmmirror.com/binaries/node`, skips GitHub Actions pnpm cache restore, and stores pnpm content under `$GITHUB_WORKSPACE/../../_cache/knowledge-core/pnpm-store`. Playwright browsers on self-hosted CI use `PLAYWRIGHT_DOWNLOAD_HOST=https://cdn.npmmirror.com/binaries/playwright`. Inject non-secret `KNOWLEDGE_CORE_GATEWAY_URL` for the BFF; the local default is http://localhost:8080. Cluster overlay deploy/web/overlay/dev points at knowledge-core-gateway in namespace knowledge-core-dev. Secrets stay in GitHub or Kubernetes Secrets. The BFF also accepts KNOWLEDGE_CORE_WEB_ORIGIN for exact Origin checks and KNOWLEDGE_CORE_GATEWAY_TIMEOUT_MS for the outbound timeout budget."
+    },
+    {
+      "id": "environment.toolchains",
+      "revision": 39,
+      "section": "environment",
+      "sources": [
+        {
+          "kind": "detected",
+          "reference": "detected:toolchain-manifests"
+        },
         {
           "kind": "documented",
           "reference": "package.json"
@@ -448,25 +507,7 @@
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-08-27T12:52:39Z",
-      "value": "Use Node.js 24.18.1 (CI pin; package engines allow >=20.9.0) and pnpm 10.31.0. Install with `pnpm install --frozen-lockfile`. Inject non-secret `KNOWLEDGE_CORE_GATEWAY_URL` for the BFF; the local default is http://localhost:8080. Cluster overlay deploy/web/overlay/dev points at knowledge-core-gateway in namespace knowledge-core-dev. Secrets stay in GitHub or Kubernetes Secrets."
-    },
-    {
-      "id": "environment.toolchains",
-      "revision": 33,
-      "section": "environment",
-      "sources": [
-        {
-          "kind": "detected",
-          "reference": "detected:toolchain-manifests"
-        },
-        {
-          "kind": "documented",
-          "reference": "package.json"
-        }
-      ],
-      "status": "verified",
-      "updatedAt": "2026-08-30T10:49:11Z",
+      "updatedAt": "2026-08-30T14:37:30Z",
       "value": [
         {
           "manifest": "package.json",
@@ -504,7 +545,7 @@
     },
     {
       "id": "services.catalog",
-      "revision": 20,
+      "revision": 35,
       "section": "services",
       "sources": [
         {
@@ -514,13 +555,17 @@
         {
           "kind": "user",
           "reference": "user-confirmed"
+        },
+        {
+          "kind": "user",
+          "reference": "user-confirmed-web-bff-session-layer"
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-08-27T12:52:39Z",
+      "updatedAt": "2026-08-30T14:32:23Z",
       "value": [
         {
-          "apis": "App Router pages under /{locale}; BFF /api/auth/*, /api/gateway/[...path], /api/health",
+          "apis": "App Router pages under /{locale}; BFF /api/bff/auth/*, /api/bff/gateway/[...path], /api/health",
           "data": "None; no domain schema",
           "dependencies": [
             "knowledge-core-gateway"
@@ -538,17 +583,21 @@
     },
     {
       "id": "services.relationships",
-      "revision": 20,
+      "revision": 35,
       "section": "services",
       "sources": [
         {
           "kind": "documented",
           "reference": "docs/technical-plan.md"
+        },
+        {
+          "kind": "user",
+          "reference": "user-confirmed-web-bff-session-layer"
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-08-27T12:52:39Z",
-      "value": "The browser talks only to Knowledge-Core-Web on the same origin. The BFF authenticates through `/api/auth/*` and proxies Gateway HTTP through `/api/gateway/[...path]`. knowledge-core-web depends on knowledge-core-gateway and does not call Identity, Knowledge, Collaboration, Attachment, or Platform directly. Live Yjs traffic is a browser-to-Collaboration path after Knowledge issues a short-lived ticket; the web process does not persist CRDT updates.\n\n```mermaid\nflowchart LR\n  Browser --> WebBFF[knowledge-core-web :3000]\n  WebBFF --> Gateway[knowledge-core-gateway :8080]\n  Gateway --> Identity\n  Gateway --> Knowledge\n  Gateway --> Collaboration\n  Gateway --> Attachment\n  Gateway --> Platform\n  Browser -.->|Yjs WebSocket after ticket| Collaboration\n```"
+      "updatedAt": "2026-08-30T14:32:23Z",
+      "value": "The browser talks only to Knowledge-Core-Web on the same origin. The BFF authenticates through `/api/bff/auth/*` and proxies Gateway HTTP through `/api/bff/gateway/[...path]`. knowledge-core-web depends on knowledge-core-gateway and does not call Identity, Knowledge, Collaboration, Attachment, or Platform directly. Live Yjs traffic is a browser-to-Collaboration path after Knowledge issues a short-lived ticket; the web process does not persist CRDT updates.\n\n```mermaid\nflowchart LR\n  Browser --> WebBFF[knowledge-core-web :3000]\n  WebBFF --> Gateway[knowledge-core-gateway :8080]\n  Gateway --> Identity\n  Gateway --> Knowledge\n  Gateway --> Collaboration\n  Gateway --> Attachment\n  Gateway --> Platform\n  Browser -.->|Yjs WebSocket after ticket| Collaboration\n```"
     },
     {
       "id": "validation.definition-of-done",
@@ -566,7 +615,7 @@
     },
     {
       "id": "workflows.build",
-      "revision": 33,
+      "revision": 39,
       "section": "workflows",
       "sources": [
         {
@@ -574,12 +623,16 @@
           "reference": "detected:project-scripts"
         },
         {
+          "kind": "detected",
+          "reference": "package.json"
+        },
+        {
           "kind": "documented",
           "reference": "package.json"
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-08-30T10:49:11Z",
+      "updatedAt": "2026-08-30T14:37:30Z",
       "value": {
         "npm:build": {
           "command": "next build",
@@ -593,7 +646,7 @@
     },
     {
       "id": "workflows.development",
-      "revision": 33,
+      "revision": 39,
       "section": "workflows",
       "sources": [
         {
@@ -614,7 +667,7 @@
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-08-30T10:49:11Z",
+      "updatedAt": "2026-08-30T14:37:30Z",
       "value": {
         "npm:dev": {
           "command": "next dev",
@@ -628,7 +681,7 @@
     },
     {
       "id": "workflows.quality",
-      "revision": 33,
+      "revision": 39,
       "section": "workflows",
       "sources": [
         {
@@ -636,12 +689,16 @@
           "reference": "detected:project-scripts"
         },
         {
+          "kind": "detected",
+          "reference": "package.json"
+        },
+        {
           "kind": "documented",
           "reference": "package.json"
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-08-30T10:49:11Z",
+      "updatedAt": "2026-08-30T14:37:30Z",
       "value": {
         "npm:lint": {
           "command": "eslint .",
@@ -655,7 +712,7 @@
     },
     {
       "id": "workflows.test",
-      "revision": 33,
+      "revision": 39,
       "section": "workflows",
       "sources": [
         {
@@ -663,12 +720,16 @@
           "reference": "detected:project-scripts"
         },
         {
+          "kind": "detected",
+          "reference": "package.json"
+        },
+        {
           "kind": "documented",
           "reference": "package.json"
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-08-30T10:49:11Z",
+      "updatedAt": "2026-08-30T14:37:30Z",
       "value": {
         "npm:test": {
           "command": "vitest run",
@@ -691,11 +752,11 @@
     "profile": "generic",
     "slug": "knowledge-core-web"
   },
-  "revision": 34,
+  "revision": 45,
   "scan": {
-    "fingerprint": "6a29d5f541de00447266aa17a2c252295da1f2ab26a3d7777f8115183977b772",
-    "inventoryCount": 83
+    "fingerprint": "d7a949e28a68b440bf62ea04028eb4b534a12cb8d47a4b17ae0c8bbcc0278532",
+    "inventoryCount": 112
   },
   "schemaVersion": 3,
-  "updatedAt": "2026-08-30T10:49:29Z"
+  "updatedAt": "2026-08-31T06:03:25Z"
 }

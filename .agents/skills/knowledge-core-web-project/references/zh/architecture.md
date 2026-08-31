@@ -66,7 +66,7 @@ flowchart LR
 flowchart LR
     subgraph System[范围内系统]
         App_Router_UI["App Router UI\n语言页面、主题、Studio 壳与登录壳"]
-        BFF_routes["BFF 路由\nHttpOnly 会话 cookie 与 Gateway HTTP 代理"]
+        BFF_routes["BFF 路由\nHttpOnly 会话 cookie、Gateway HTTP 代理、刷新策略与浏览器安全边界"]
         Standalone_Node_process["独立 Node 进程\n在端口 3000 提供生产构建，并暴露 /api/health"]
     end
 ```
@@ -80,7 +80,7 @@ flowchart LR
 
 ### 唯一 Gateway 客户端
 
-- **description**: 服务端代码只通过 `src/lib/api/gateway.ts` 和 `/api/gateway` 代理访问 Knowledge-Core；页面不得散落 fetch。
+- **description**: 服务端代码只通过 `src/lib/api/bff/gateway.ts` 和 `/api/bff/gateway` 代理访问 Knowledge-Core；页面不得散落 fetch。共享服务端实现位于 `src/lib/bff/`。
 
 ### 源站失败即关闭
 
@@ -95,11 +95,11 @@ flowchart LR
 
 ### 登录与会话 cookie
 
-- **description**: 浏览器 POST 到 `/api/auth/login`。BFF 调用 Gateway `/api/v1/sessions`，然后设置 HttpOnly cookie `kc_access` 与 `kc_refresh`，只返回用户投影。
+- **description**: 浏览器 POST 到 `/api/bff/auth/login`。BFF 调用 Gateway `/api/v1/sessions`，然后设置 HttpOnly cookie `kc_access` 与 `kc_refresh`，只返回用户投影。
 
 ### 已认证 Gateway 代理
 
-- **description**: 浏览器调用 `/api/gateway/*`。BFF 转发方法、正文和选定追踪头，并把会话 cookie 作为 Gateway 的 Authorization 头附上。
+- **description**: 浏览器调用 `/api/bff/gateway/*`。BFF 转发方法、正文和选定追踪头，并把会话 cookie 作为 Gateway 的 Authorization 头附上。
 
 ### 静默刷新
 
@@ -156,6 +156,13 @@ flowchart LR
   - 两个副本之间除 cookie 外没有进程内会话存储
   - Gateway 可用性由冒烟验证，而不是 `/api/health`
 
+### 集中式服务端会话层
+
+- **rationale**: Cookie 处理、刷新轮换、源站校验、重试和 Gateway 代理都维护在一个仅服务端可访问的边界内，同时 Gateway 仍是唯一的 Knowledge-Core 边缘。
+- **tradeoffs**:
+  - 面向 Web 的 BFF 路径由 Web 应用负责并随应用版本化
+  - 已认证的浏览器请求仍需要 Next.js 运行时
+
 
 ## 风险
 
@@ -172,4 +179,4 @@ flowchart LR
 - **mitigation**: 这些环境定义除 kind 外不要编造名称细节；禁止虚构命名空间、副本数或 digest。
 
 
-<!-- fact:architecture.design status:verified sources:docs/technical-plan.md -->
+<!-- fact:architecture.design status:verified sources:docs/technical-plan.md, user-confirmed-web-bff-session-layer -->

@@ -24,7 +24,7 @@ grep -q "Pages worth reading" <<<"$homepage"
 direct="$(raw "$gateway_service" 8080 '/api/v1/documents?limit=1')"
 jq -e . >/dev/null <<<"$direct"
 
-bff="$(raw "$web_service" 3000 '/api/gateway/api/v1/documents?limit=1')"
+bff="$(raw "$web_service" 3000 '/api/bff/gateway/api/v1/documents?limit=1')"
 jq -e . >/dev/null <<<"$bff"
 
 gateway_ip="${public_gateway_address%:*}"

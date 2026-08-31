@@ -8,7 +8,7 @@
 
 src/app 拥有 App Router 页面、布局和 BFF 路由处理器。
 src/components 拥有 UI 与 Studio 壳。
-src/lib 拥有 i18n、Gateway 客户端和协作辅助。
+src/lib 拥有 i18n、Gateway 客户端、共享 BFF 会话/代理层和协作辅助。
 deploy/web 拥有 Kustomize base 与 overlay。
 docker 拥有生产镜像。
 scripts 拥有冒烟检查。
@@ -16,7 +16,7 @@ e2e 拥有 Playwright 规格。
 docs 拥有产品与技术决策。
 storybook-static、test-results、playwright-report 和 .next 是生成物。
 
-<!-- fact:conventions.code-layout status:verified sources:filesystem:top-level-directories, user-confirmed -->
+<!-- fact:conventions.code-layout status:verified sources:filesystem:top-level-directories, user-confirmed, user-confirmed-web-bff-session-layer -->
 
 密钥只能通过 GitHub 或 Kubernetes Secrets 注入；不要提交明文密钥。认证 cookie 为 HttpOnly，HTTPS 请求时 Secure，access 使用 SameSite Lax，refresh 使用 Strict。日志、指标和客户端包不得包含会话凭证。
 

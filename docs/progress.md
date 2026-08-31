@@ -96,3 +96,15 @@ Knowledge-Core-Web: pnpm build-storybook 通过
 
 - 当前发布 HTTP 契约接收并校验 Yjs state vector，但 Collaboration 快照 RPC 仍使用现有版本接口；严格 state-vector 相等前置条件、Tiptap/Yjs 编辑器、媒体上传、作者页和归档筛选列入下一批。
 - Core 全量 Go/Rust 测试、Go/Rust 生成检查和 Web typecheck/Vitest 已通过；需要在部署环境执行迁移、真实发布回放和 Playwright 用户路径。
+
+## 2026-08-30：Web BFF 会话层整理
+
+### 已完成
+
+- 将认证、refresh、退出和 Gateway 代理收敛到统一的 `src/lib/bff` 服务端层。
+- 浏览器 BFF 路径统一为 `/api/bff/auth/*` 与 `/api/bff/gateway/*`，前端不再使用旧 `/api/auth/*`、`/api/gateway/*` 路径。
+- 增加精确 Origin 校验、Cookie 属性集中管理、请求体限制、Gateway 超时/不可用错误映射和 refresh 失败清理行为。
+
+### 验证边界
+
+- 保持 Gateway、Identity、Knowledge、Attachment、Collaboration 和 Platform 契约不变；公开 Server Component 数据读取仍直接使用服务端 Gateway client。

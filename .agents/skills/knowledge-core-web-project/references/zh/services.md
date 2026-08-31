@@ -2,7 +2,7 @@
 
 # Knowledge-Core-Web: 服务
 
-浏览器只与同源的 Knowledge-Core-Web 通信。BFF 通过 `/api/auth/*` 做认证，并通过 `/api/gateway/[...path]` 代理 Gateway HTTP。knowledge-core-web 依赖 knowledge-core-gateway，不直接调用 Identity、Knowledge、Collaboration、Attachment 或 Platform。实时 Yjs 流量是浏览器到 Collaboration 的路径（Knowledge 签发短时 ticket 之后）；Web 进程不持久化 CRDT 更新。
+浏览器只与同源的 Knowledge-Core-Web 通信。BFF 通过 `/api/bff/auth/*` 做认证，并通过 `/api/bff/gateway/[...path]` 代理 Gateway HTTP。knowledge-core-web 依赖 knowledge-core-gateway，不直接调用 Identity、Knowledge、Collaboration、Attachment 或 Platform。实时 Yjs 流量是浏览器到 Collaboration 的路径（Knowledge 签发短时 ticket 之后）；Web 进程不持久化 CRDT 更新。
 
 ```mermaid
 flowchart LR
@@ -16,11 +16,11 @@ flowchart LR
   Browser -.->|拿到 ticket 后的 Yjs WebSocket| Collaboration
 ```
 
-<!-- fact:services.relationships status:verified sources:docs/technical-plan.md -->
+<!-- fact:services.relationships status:verified sources:docs/technical-plan.md, user-confirmed-web-bff-session-layer -->
 
 ### knowledge-core-web
 
-- **apis**: `/{locale}` 下的 App Router 页面；BFF `/api/auth/*`、`/api/gateway/[...path]`、`/api/health`
+- **apis**: `/{locale}` 下的 App Router 页面；BFF `/api/bff/auth/*`、`/api/bff/gateway/[...path]`、`/api/health`
 - **data**: 无；没有领域 schema
 - **dependencies**: knowledge-core-gateway
 - **doesNotOwn**: PostgreSQL、Redis、NATS、MinIO/S3、Yjs 持久化、Gateway 路由或集群网络策略
@@ -30,7 +30,7 @@ flowchart LR
 - **role**: Next.js UI 与同源 BFF
 
 
-<!-- fact:services.catalog status:verified sources:deploy/web/base/deployment.yaml, user-confirmed -->
+<!-- fact:services.catalog status:verified sources:deploy/web/base/deployment.yaml, user-confirmed, user-confirmed-web-bff-session-layer -->
 
 ## 附录
 

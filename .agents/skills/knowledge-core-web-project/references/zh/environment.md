@@ -32,9 +32,9 @@
 
 <!-- fact:environment.definitions status:verified sources:deploy/web/overlay/dev/config.yaml -->
 
-使用 Node.js 24.18.1（CI 钉死版本；package engines 允许 >=20.9.0）和 pnpm 10.31.0。用 `pnpm install --frozen-lockfile` 安装。为 BFF 注入非密钥的 `KNOWLEDGE_CORE_GATEWAY_URL`；本地默认是 http://localhost:8080。集群 overlay `deploy/web/overlay/dev` 指向 `knowledge-core-dev` 命名空间中的 knowledge-core-gateway。密钥只放在 GitHub 或 Kubernetes Secrets。
+使用 Node.js 24.18.1（CI 钉死版本；package engines 允许 >=20.9.0）和 pnpm 10.31.0。用 `pnpm install --frozen-lockfile` 安装。包 tarball 通过 `.npmrc` 走 npmmirror（`registry=https://registry.npmmirror.com`）。自托管 CI 从 `https://cdn.npmmirror.com/binaries/node` 下载 Node，跳过 GitHub Actions 的 pnpm 缓存恢复，并把 pnpm 内容存到 `$GITHUB_WORKSPACE/../../_cache/knowledge-core/pnpm-store`。自托管 CI 上的 Playwright 浏览器使用 `PLAYWRIGHT_DOWNLOAD_HOST=https://cdn.npmmirror.com/binaries/playwright`。为 BFF 注入非密钥的 `KNOWLEDGE_CORE_GATEWAY_URL`；本地默认是 http://localhost:8080。集群 overlay `deploy/web/overlay/dev` 指向 `knowledge-core-dev` 命名空间中的 knowledge-core-gateway。密钥只放在 GitHub 或 Kubernetes Secrets。BFF 还接受用于精确 Origin 校验的 `KNOWLEDGE_CORE_WEB_ORIGIN`，以及用于出站超时预算的 `KNOWLEDGE_CORE_GATEWAY_TIMEOUT_MS`。
 
-<!-- fact:environment.setup status:verified sources:package.json, user-confirmed -->
+<!-- fact:environment.setup status:verified sources:package.json, user-confirmed, user-confirmed-web-bff-session-layer -->
 
 ## 附录
 
@@ -44,7 +44,7 @@
 
 - `{"manifest":"package.json","toolchain":"node"}`
 
-来源： `detected:toolchain-manifests`
+来源： `detected:toolchain-manifests`, `package.json`, `user-confirmed`
 
 ## `identity.project-name`
 

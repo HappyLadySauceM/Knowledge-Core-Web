@@ -29,7 +29,7 @@ function renderNode(node: RichTextNode, index: number, attachments: Map<string, 
   if (node.type === "image") {
     const attachmentId = typeof attrs.attachmentId === "string" ? attrs.attachmentId : undefined;
     const attachment = attachmentId ? attachments.get(attachmentId) : undefined;
-    const src = safeHref(attachment?.content_url) ?? (attachmentId ? `/api/gateway/api/v1/attachments/${encodeURIComponent(attachmentId)}/content` : undefined);
+    const src = safeHref(attachment?.content_url) ?? (attachmentId ? `/api/bff/gateway/api/v1/attachments/${encodeURIComponent(attachmentId)}/content` : undefined);
     return src ? <img key={key} src={src} alt={typeof attrs.alt === "string" ? attrs.alt : attachment?.filename ?? ""} loading="lazy" /> : null;
   }
   return <p key={key}>{text}</p>;

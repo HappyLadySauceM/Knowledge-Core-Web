@@ -8,7 +8,7 @@ Use strict TypeScript and ESLint. Validate with Vitest, Playwright, production b
 
 src/app owns App Router pages, layouts, and BFF route handlers.
 src/components owns UI and studio shells.
-src/lib owns i18n, the Gateway client, and collaboration helpers.
+src/lib owns i18n, the Gateway client, the shared BFF session/proxy layer, and collaboration helpers.
 deploy/web owns Kustomize base and overlays.
 docker owns the production image.
 scripts owns smoke checks.
@@ -16,7 +16,7 @@ e2e owns Playwright specs.
 docs owns product and technical decisions.
 storybook-static, test-results, playwright-report, and .next are generated outputs.
 
-<!-- fact:conventions.code-layout status:verified sources:filesystem:top-level-directories, user-confirmed -->
+<!-- fact:conventions.code-layout status:verified sources:filesystem:top-level-directories, user-confirmed, user-confirmed-web-bff-session-layer -->
 
 Inject secrets through GitHub or Kubernetes Secrets only; do not commit plaintext secrets. Authentication cookies are HttpOnly, Secure when the request is HTTPS, and use SameSite Lax for access and Strict for refresh. Logs, metrics, and client bundles must not contain session credentials.
 

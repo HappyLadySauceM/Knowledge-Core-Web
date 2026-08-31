@@ -8,3 +8,5 @@ metadata:
     app.kubernetes.io/part-of: knowledge-core
 data:
   KNOWLEDGE_CORE_GATEWAY_URL: http://knowledge-core-gateway.knowledge-core-dev.svc.cluster.local:8080
+  KNOWLEDGE_CORE_WEB_ORIGIN: https://knowledge-core.happyladysauce.local
+  KNOWLEDGE_CORE_GATEWAY_TIMEOUT_MS: "30000"

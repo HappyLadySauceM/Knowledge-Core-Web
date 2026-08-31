@@ -66,7 +66,7 @@ flowchart LR
 flowchart LR
     subgraph System[System in scope]
         App_Router_UI["App Router UI\nLocale pages, theme, Studio shell, and login shell"]
-        BFF_routes["BFF routes\nHttpOnly session cookies and Gateway HTTP proxy"]
+        BFF_routes["BFF routes\nHttpOnly session cookies, Gateway HTTP proxy, refresh policy, and browser security boundary"]
         Standalone_Node_process["Standalone Node process\nServes the production build on port 3000 with /api/health"]
     end
 ```
@@ -80,7 +80,7 @@ flowchart LR
 
 ### Single Gateway client
 
-- **description**: Server code reaches Knowledge-Core only through src/lib/api/gateway.ts and the /api/gateway proxy; pages do not scatter fetch calls.
+- **description**: Server code reaches Knowledge-Core only through src/lib/api/gateway.ts for server-rendered data and the shared src/lib/bff/gateway.ts for the /api/bff/gateway proxy; pages do not scatter fetch calls.
 
 ### Fail closed at the origin
 
@@ -95,11 +95,11 @@ flowchart LR
 
 ### Login and session cookies
 
-- **description**: The browser posts to /api/auth/login. The BFF calls Gateway /api/v1/sessions, then sets HttpOnly cookies kc_access and kc_refresh and returns only the user projection.
+- **description**: The browser posts to /api/bff/auth/login. The BFF calls Gateway /api/v1/sessions, then sets HttpOnly cookies kc_access and kc_refresh and returns only the user projection.
 
 ### Authenticated Gateway proxy
 
-- **description**: The browser calls /api/gateway/*. The BFF forwards method, body, and selected tracing headers, attaching the session cookie as the Gateway Authorization header.
+- **description**: The browser calls /api/bff/gateway/*. The BFF forwards method, body, and selected tracing headers, attaching the session cookie as the Gateway Authorization header.
 
 ### Silent refresh
 
@@ -156,6 +156,13 @@ flowchart LR
   - Two replicas still share no in-process session store beyond cookies
   - Gateway availability is verified by smoke, not by /api/health
 
+### Centralized server-side session layer
+
+- **rationale**: Cookie handling, refresh rotation, origin checks, retries, and Gateway proxying are maintained in one server-only boundary while Gateway remains the only Knowledge-Core edge.
+- **tradeoffs**:
+  - Web-facing BFF paths are owned and versioned with the Web application
+  - The Next.js runtime remains required for authenticated browser requests
+
 
 ## Risks
 
@@ -172,4 +179,4 @@ flowchart LR
 - **mitigation**: Keep those environment definitions unnamed beyond kind; never invent namespaces, replica counts, or digests.
 
 
-<!-- fact:architecture.design status:verified sources:docs/technical-plan.md -->
+<!-- fact:architecture.design status:verified sources:docs/technical-plan.md, user-confirmed-web-bff-session-layer -->

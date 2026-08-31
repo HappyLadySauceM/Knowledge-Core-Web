@@ -2,7 +2,7 @@
 
 # Knowledge-Core-Web: Services
 
-The browser talks only to Knowledge-Core-Web on the same origin. The BFF authenticates through `/api/auth/*` and proxies Gateway HTTP through `/api/gateway/[...path]`. knowledge-core-web depends on knowledge-core-gateway and does not call Identity, Knowledge, Collaboration, Attachment, or Platform directly. Live Yjs traffic is a browser-to-Collaboration path after Knowledge issues a short-lived ticket; the web process does not persist CRDT updates.
+The browser talks only to Knowledge-Core-Web on the same origin. The BFF authenticates through `/api/bff/auth/*` and proxies Gateway HTTP through `/api/bff/gateway/[...path]`. knowledge-core-web depends on knowledge-core-gateway and does not call Identity, Knowledge, Collaboration, Attachment, or Platform directly. Live Yjs traffic is a browser-to-Collaboration path after Knowledge issues a short-lived ticket; the web process does not persist CRDT updates.
 
 ```mermaid
 flowchart LR
@@ -16,11 +16,11 @@ flowchart LR
   Browser -.->|Yjs WebSocket after ticket| Collaboration
 ```
 
-<!-- fact:services.relationships status:verified sources:docs/technical-plan.md -->
+<!-- fact:services.relationships status:verified sources:docs/technical-plan.md, user-confirmed-web-bff-session-layer -->
 
 ### knowledge-core-web
 
-- **apis**: App Router pages under /{locale}; BFF /api/auth/*, /api/gateway/[...path], /api/health
+- **apis**: App Router pages under /{locale}; BFF /api/bff/auth/*, /api/bff/gateway/[...path], /api/health
 - **data**: None; no domain schema
 - **dependencies**: knowledge-core-gateway
 - **doesNotOwn**: PostgreSQL, Redis, NATS, MinIO/S3, Yjs persistence, Gateway routes, or cluster network policy
@@ -30,7 +30,7 @@ flowchart LR
 - **role**: Next.js UI and same-origin BFF
 
 
-<!-- fact:services.catalog status:verified sources:deploy/web/base/deployment.yaml, user-confirmed -->
+<!-- fact:services.catalog status:verified sources:deploy/web/base/deployment.yaml, user-confirmed, user-confirmed-web-bff-session-layer -->
 
 ## Appendix
 

@@ -32,9 +32,9 @@
 
 <!-- fact:environment.definitions status:verified sources:deploy/web/overlay/dev/config.yaml -->
 
-Use Node.js 24.18.1 (CI pin; package engines allow >=20.9.0) and pnpm 10.31.0. Install with `pnpm install --frozen-lockfile`. Inject non-secret `KNOWLEDGE_CORE_GATEWAY_URL` for the BFF; the local default is http://localhost:8080. Cluster overlay deploy/web/overlay/dev points at knowledge-core-gateway in namespace knowledge-core-dev. Secrets stay in GitHub or Kubernetes Secrets.
+Use Node.js 24.18.1 (CI pin; package engines allow >=20.9.0) and pnpm 10.31.0. Install with `pnpm install --frozen-lockfile`. Package tarballs use npmmirror via `.npmrc` (`registry=https://registry.npmmirror.com`). Self-hosted CI downloads Node from `https://cdn.npmmirror.com/binaries/node`, skips GitHub Actions pnpm cache restore, and stores pnpm content under `$GITHUB_WORKSPACE/../../_cache/knowledge-core/pnpm-store`. Playwright browsers on self-hosted CI use `PLAYWRIGHT_DOWNLOAD_HOST=https://cdn.npmmirror.com/binaries/playwright`. Inject non-secret `KNOWLEDGE_CORE_GATEWAY_URL` for the BFF; the local default is http://localhost:8080. Cluster overlay deploy/web/overlay/dev points at knowledge-core-gateway in namespace knowledge-core-dev. Secrets stay in GitHub or Kubernetes Secrets. The BFF also accepts KNOWLEDGE_CORE_WEB_ORIGIN for exact Origin checks and KNOWLEDGE_CORE_GATEWAY_TIMEOUT_MS for the outbound timeout budget.
 
-<!-- fact:environment.setup status:verified sources:package.json, user-confirmed -->
+<!-- fact:environment.setup status:verified sources:.npmrc, README.md#section, package.json, user-confirmed, user-confirmed-web-bff-session-layer -->
 
 ## Appendix
 
@@ -44,7 +44,7 @@ Status: `verified`
 
 - `{"manifest":"package.json","toolchain":"node"}`
 
-Sources: `detected:toolchain-manifests`, `package.json`
+Sources: `detected:toolchain-manifests`, `package.json`, `user-confirmed`
 
 ## `identity.project-name`
 

@@ -18,9 +18,9 @@ Browser → Next.js BFF（HttpOnly cookie）→ Knowledge-Core Gateway → Ident
 ```
 
 - access/refresh token 只存在服务端会话或 HttpOnly、Secure、SameSite cookie。
-- BFF 统一转发 Problem Details、request id、trace context 和超时语义。
+- BFF 统一转发 Problem Details、request id、trace context 和超时语义。浏览器接口统一位于 `/api/bff/auth/*` 与 `/api/bff/gateway/*`；会话层集中处理 HttpOnly Cookie、Origin 校验、refresh 轮换和一次重试。
 - 浏览器端只能依赖稳定的前后端 DTO；当前类型入口为 `src/lib/api/types.ts`。
-- Gateway 请求入口为 `src/lib/api/gateway.ts`，不在页面组件中散落 `fetch`。
+- Server Component 的 Gateway 请求入口为 `src/lib/api/gateway.ts`，不在页面组件中散落 `fetch`。服务端 BFF 实现位于 `src/lib/bff/`，只允许转发 `/api/v1/*`，不承载领域权限规则；认证控制类 Gateway 路径只通过 `/api/bff/auth/*` 暴露。
 
 ## Knowledge-Core 对接原则
 
@@ -57,6 +57,7 @@ pnpm build-storybook
 - Next.js 使用 standalone 输出，由 Node 24 生产镜像运行在 3000 端口。
 - `/api/health` 是只检查 Web 进程的健康入口；Gateway 依赖通过部署 Smoke 单独验证。
 - `KNOWLEDGE_CORE_GATEWAY_URL` 仅作为服务端运行时配置注入，不进入浏览器 bundle。
+- `KNOWLEDGE_CORE_WEB_ORIGIN` 用于 BFF 的精确 Origin/CSRF 校验；`KNOWLEDGE_CORE_GATEWAY_TIMEOUT_MS` 控制出站 Gateway 超时。两者都由运行时配置注入。
 - `dev` 发布构建 immutable Harbor candidate digest，GitOps 更新后等待 `knowledge-core-web-dev` Argo Application 健康，再执行 Web、Gateway 直连和 BFF Smoke。
 - Smoke 和 DeepSeek 发布摘要通过后，流水线仅 fast-forward 推送 `main`，并创建同一 SHA 的版本 Tag 与 GitHub Release；冲突或分叉时禁止强推。
 

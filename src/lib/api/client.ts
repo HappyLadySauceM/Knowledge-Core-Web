@@ -1,7 +1,7 @@
 import type { ProblemDetails } from "@/lib/api/types";
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`/api/gateway${path}`, {
+  const response = await fetch(`/api/bff/gateway${path}`, {
     ...init,
     headers: { "content-type": "application/json", ...init?.headers },
   });
