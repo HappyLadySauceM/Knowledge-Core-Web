@@ -17,6 +17,9 @@ permissions:
 
 env:
   BUILD_CPU_PERCENT: "75"
+  # Reusable workflows do not inherit caller env; honor runner HTTP_PROXY on Node 24 actions.
+  # reusable workflow 不会继承调用方 env；让 Node 24 action 使用 runner 的 HTTP_PROXY。
+  NODE_USE_ENV_PROXY: "1"
 
 concurrency:
   group: web-ci-${{ github.workflow }}-${{ github.ref }}
