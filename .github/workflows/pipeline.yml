@@ -8,28 +8,29 @@ on:
 permissions:
   actions: read
   contents: read
-  statuses: write
 
 env:
-  CI_IMAGE: harbor.happyladysauce.local/knowledge-core/ci-templates:v1.1.11@sha256:26af40ffdc6efdef4d8e7a6135d8e76f2326639cda9fa21c46af7477f6ebc0bc
+  CI_PROJECT_CONFIG: .ci/pipeline.yaml
   BUILD_CPU_PERCENT: "75"
-  # Node 24 actions need this when the runner exports HTTP_PROXY (create-github-app-token post included).
-  # runner 导出 HTTP_PROXY 时，Node 24 的 action（含 create-github-app-token 的 post）需要此开关。
   NODE_USE_ENV_PROXY: "1"
-  CI_PROJECT_CONFIG_JSON: >-
-    {"project":"Knowledge-Core-Web","source_repo":"HappyLadySauceM/Knowledge-Core-Web","gitops_repo":"https://github.com/HappyLadySauceM/deploy.git","gitops_path":"Knowledge-Core-Web","gitops_kustomization":"dev/common/kustomization.yaml","gitops_branch":"main","shared_paths":[".github",".dockerignore","package.json","pnpm-lock.yaml",".npmrc","next.config.ts","tsconfig.json","eslint.config.mjs","vitest.config.ts","playwright.config.ts","postcss.config.mjs","docker","scripts","public","VERSION"],"harbor_registry":"harbor.happyladysauce.local","harbor_project":"knowledge-core","argocd_server":"argocd.happyladysauce.local","smoke_command":["./scripts/smoke.sh"],"release_model":"git-independent-service-aggregate","aggregate_release_prefix":"knowledge-core-web","aggregate_version_file":"VERSION","release_language":"zh-CN","deepseek_model":"deepseek-v4-flash","base_images":[{"source":"docker.m.daocloud.io/library/node:24.18.1-bookworm-slim@sha256:a09aabc645e86e81e23dab78e0c0f2eaa233cab4277c7188232181a1a8bd5d39","destination":"harbor.happyladysauce.local/knowledge-core/base/node:24.18.1-bookworm-slim"}],"services":[{"name":"web","source_path":"src","version_file":"VERSION","dockerfile":"docker/web/Dockerfile","context":".","image_repository":"harbor.happyladysauce.local/knowledge-core/web","deploy_snapshot":"deploy/web","kustomize_name":"knowledge-core-web"}]}
+
+# Serialize releases for this project/branch while allowing the matrix jobs in
+# one run to consume all available ARC capacity.
+concurrency:
+  group: ${{ github.repository }}-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   plan:
-    runs-on: [self-hosted, Linux, X64, devops]
+    runs-on: [self-hosted, Linux, X64, hls-standard]
     timeout-minutes: 10
     concurrency:
-      group: knowledge-core-web-dev-plan
+      group: ${{ github.repository }}-${{ github.workflow }}-plan-${{ github.ref }}
       cancel-in-progress: true
     outputs:
-      state_dir: ${{ steps.plan.outputs.state_dir }}
       services: ${{ steps.plan.outputs.services }}
       build_services: ${{ steps.plan.outputs.build_services }}
+      build_matrix: ${{ steps.plan.outputs.build_matrix }}
       deploy_services: ${{ steps.plan.outputs.deploy_services }}
       release_services: ${{ steps.plan.outputs.release_services }}
       deploy_changed: ${{ steps.plan.outputs.deploy_changed }}
@@ -39,272 +40,243 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - name: Prepare Harbor credentials for CI image
-        env:
-          HARBOR_DOCKER_CONFIG_JSON: ${{ secrets.HARBOR_DOCKER_CONFIG_JSON }}
-          HARBOR_CA_PEM: ${{ secrets.HARBOR_CA_PEM }}
-        run: |
-          set -euo pipefail
-          umask 077
-          install -d "$RUNNER_TEMP/knowledge-core-harbor"
-          printf '%s' "$HARBOR_DOCKER_CONFIG_JSON" > "$RUNNER_TEMP/knowledge-core-harbor/config.json"
-          printf '%s' "$HARBOR_CA_PEM" > "$RUNNER_TEMP/knowledge-core-harbor/ca.crt"
-          test -s "$RUNNER_TEMP/knowledge-core-harbor/config.json"
-          test -s "$RUNNER_TEMP/knowledge-core-harbor/ca.crt"
-          echo "DOCKER_CONFIG=$RUNNER_TEMP/knowledge-core-harbor" >> "$GITHUB_ENV"
-          echo "SSL_CERT_FILE=$RUNNER_TEMP/knowledge-core-harbor/ca.crt" >> "$GITHUB_ENV"
       - name: Plan affected service
         id: plan
         run: |
           set -euo pipefail
-          # Align container UID with the runner user so bind mounts stay writable.
-          # 容器 UID 与 runner 用户对齐，避免挂载目录被写成 root。
-          socket="${DOCKER_HOST:-unix:///var/run/docker.sock}"
-          socket="${socket#unix://}"
-          KC_CACHE_ROOT="$(cd "$GITHUB_WORKSPACE/../.." && pwd)/_cache/knowledge-core"
-          ci_run() {
-            docker run --rm --network host \
-              --user "$(id -u):$(id -g)" \
-              --group-add "$(stat -c '%g' "$socket")" \
-              -e HOME="${RUNNER_TEMP:-/tmp}" \
-              -e HTTP_PROXY -e HTTPS_PROXY -e NO_PROXY \
-              -e http_proxy -e https_proxy -e no_proxy \
-              "$@"
-          }
-          state_dir="$KC_CACHE_ROOT/runs/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          install -d -m 0700 "$state_dir"
-          git fetch origin main dev
-          base="$(git rev-parse origin/main)"
-          ci_run \
-            -v "$GITHUB_WORKSPACE:/workspace" -v "$state_dir:/state" \
-            -e CI_PROJECT_CONFIG_JSON -w /workspace "$CI_IMAGE" validate
-          changes="$(ci_run \
-            -v "$GITHUB_WORKSPACE:/workspace" -v "$state_dir:/state" \
-            -e CI_PROJECT_CONFIG_JSON -w /workspace "$CI_IMAGE" changes \
-            --base "$base" --details-file /state/changes.json)"
+          release_branch="$(python3 - <<'PY'
+          import os
+          from ci_templates.config import load_config
+          print(load_config(os.environ["CI_PROJECT_CONFIG"]).release_branch)
+          PY
+          )"
+          git fetch --no-tags origin "$release_branch"
+          base="$(git rev-parse "origin/$release_branch")"
+          ci-templates validate --config "$CI_PROJECT_CONFIG"
+          changes="$(ci-templates changes --config "$CI_PROJECT_CONFIG" --base "$base" --details-file changes.json)"
           echo "$changes"
           services="$(jq -r '.services | join(",")' <<<"$changes")"
           build_services="$(jq -r '.build_services | join(",")' <<<"$changes")"
           deploy_services="$(jq -r '.deploy_services | join(",")' <<<"$changes")"
           release_services="$(jq -r '.release_services | join(",")' <<<"$changes")"
           deploy_changed="$(jq -r '.deploy_changed' <<<"$changes")"
+          build_matrix="$(jq -cn --arg value "$build_services" '$value | split(",") | map(select(length > 0)) | if length == 0 then ["__skip__"] else . end')"
           has_changes=false
           has_build_changes=false
-          if [[ -n "$build_services" ]]; then has_build_changes=true; fi
-          if [[ -n "$services" || "$deploy_changed" == true ]]; then has_changes=true; fi
-          echo "state_dir=$state_dir" >> "$GITHUB_OUTPUT"
-          echo "services=$services" >> "$GITHUB_OUTPUT"
-          echo "build_services=$build_services" >> "$GITHUB_OUTPUT"
-          echo "deploy_services=$deploy_services" >> "$GITHUB_OUTPUT"
-          echo "release_services=$release_services" >> "$GITHUB_OUTPUT"
-          echo "deploy_changed=$deploy_changed" >> "$GITHUB_OUTPUT"
-          echo "has_build_changes=$has_build_changes" >> "$GITHUB_OUTPUT"
-          echo "has_changes=$has_changes" >> "$GITHUB_OUTPUT"
+          [[ -n "$services" || "$deploy_changed" == true ]] && has_changes=true
+          [[ -n "$build_services" ]] && has_build_changes=true
+          {
+            echo "services=$services"
+            echo "build_services=$build_services"
+            echo "build_matrix=$build_matrix"
+            echo "deploy_services=$deploy_services"
+            echo "release_services=$release_services"
+            echo "deploy_changed=$deploy_changed"
+            echo "has_build_changes=$has_build_changes"
+            echo "has_changes=$has_changes"
+          } >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: knowledge-core-web-plan-${{ github.run_id }}-${{ github.run_attempt }}
+          path: changes.json
+          if-no-files-found: error
+          retention-days: 7
 
   deploy-verify:
     needs: plan
     if: needs.plan.outputs.deploy_changed == 'true'
-    runs-on: [self-hosted, Linux, X64, devops]
+    runs-on: [self-hosted, Linux, X64, hls-standard]
+    timeout-minutes: 15
     concurrency:
-      group: knowledge-core-web-dev-deploy-verify
+      group: ${{ github.repository }}-${{ github.workflow }}-deploy-verify-${{ github.ref }}
       cancel-in-progress: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 1
-      - name: Validate deployment overlay
+      - name: Validate web deployment overlay
         run: kubectl kustomize deploy/web/overlay/dev >/dev/null
-
-  release-preflight:
-    needs: plan
-    if: needs.plan.outputs.has_changes == 'true'
-    runs-on: [self-hosted, Linux, X64, devops]
-    timeout-minutes: 5
-    environment: release
-    concurrency:
-      group: knowledge-core-web-dev-release-preflight
-      cancel-in-progress: true
-    steps:
-      - name: Validate release inputs
-        env:
-          HARBOR_DOCKER_CONFIG_JSON: ${{ secrets.HARBOR_DOCKER_CONFIG_JSON }}
-          HARBOR_CA_PEM: ${{ secrets.HARBOR_CA_PEM }}
-          GH_APP_ID: ${{ secrets.GH_APP_ID }}
-          GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
-          K3S_RELEASE_KUBECONFIG: ${{ secrets.K3S_RELEASE_KUBECONFIG }}
-          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-        run: |
-          set -euo pipefail
-          missing=()
-          for name in HARBOR_DOCKER_CONFIG_JSON HARBOR_CA_PEM GH_APP_ID GH_APP_PRIVATE_KEY K3S_RELEASE_KUBECONFIG DEEPSEEK_API_KEY; do
-            if [[ -z "${!name:-}" ]]; then missing+=("$name"); fi
-          done
-          if (( ${#missing[@]} > 0 )); then
-            printf '::error::Missing release inputs: %s\n' "${missing[*]}"
-            exit 1
-          fi
-          registry="harbor.happyladysauce.local"
-          expected_username='robot$knowledge-core+ci-devops'
-          jq -e --arg registry "$registry" --arg username "$expected_username" \
-            '.auths[$registry].username == $username and
-             (.auths[$registry].password | type == "string" and length >= 8) and
-             (.auths[$registry].auth | type == "string" and length > 0)' \
-            <<<"$HARBOR_DOCKER_CONFIG_JSON" >/dev/null
-
-          preflight_dir="$RUNNER_TEMP/knowledge-core-web-preflight-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          install -d -m 0700 "$preflight_dir"
-          cleanup_preflight() {
-            shred -u "$preflight_dir/config.json" "$preflight_dir/ca.crt" 2>/dev/null || true
-            rmdir "$preflight_dir" 2>/dev/null || true
-          }
-          trap cleanup_preflight EXIT
-          printf '%s' "$HARBOR_DOCKER_CONFIG_JSON" > "$preflight_dir/config.json"
-          printf '%s' "$HARBOR_CA_PEM" > "$preflight_dir/ca.crt"
-          openssl x509 -in "$preflight_dir/ca.crt" -noout -checkend 0 >/dev/null
-          DOCKER_CONFIG="$preflight_dir" docker buildx imagetools inspect "$CI_IMAGE" >/dev/null
-          echo "Release inputs and Harbor publisher identity are valid."
 
   web-verify-build:
     needs: plan
     if: needs.plan.outputs.has_build_changes == 'true'
-    uses: ./.github/workflows/ci.yml
-    with:
-      runner_label: devops
+    runs-on: [self-hosted, Linux, X64, hls-standard]
+    timeout-minutes: 30
+    concurrency:
+      group: ${{ github.repository }}-${{ github.workflow }}-build-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.18.1
+          mirror: https://cdn.npmmirror.com/binaries/node
+      - name: Install and run web quality gates
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack install --global pnpm@10.31.0
+          pnpm install --frozen-lockfile
+          pnpm lint
+          pnpm typecheck
+          pnpm test
+          pnpm build
+          printf 'verified-web\n' > web-verification.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: knowledge-core-web-verification-${{ github.run_id }}-${{ github.run_attempt }}
+          path: web-verification.txt
+          if-no-files-found: error
+          retention-days: 7
 
   release-notes:
-    needs: [plan, release-preflight]
-    if: needs.plan.outputs.has_changes == 'true' && needs.release-preflight.result == 'success'
-    runs-on: [self-hosted, Linux, X64, devops]
+    needs: plan
+    if: needs.plan.outputs.has_changes == 'true'
+    runs-on: [self-hosted, Linux, X64, hls-standard]
     timeout-minutes: 10
     environment: release
     concurrency:
-      group: knowledge-core-web-dev-release-notes
+      group: ${{ github.repository }}-${{ github.workflow }}-release-notes-${{ github.ref }}
       cancel-in-progress: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 1
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: knowledge-core-web-plan-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Generate release summary
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-          STATE_DIR: ${{ needs.plan.outputs.state_dir }}
           SERVICES: ${{ needs.plan.outputs.release_services }}
         run: |
           set -euo pipefail
-          socket="${DOCKER_HOST:-unix:///var/run/docker.sock}"
-          socket="${socket#unix://}"
-          ci_run() {
-            docker run --rm --network host \
-              --user "$(id -u):$(id -g)" \
-              --group-add "$(stat -c '%g' "$socket")" \
-              -e HOME="${RUNNER_TEMP:-/tmp}" \
-              -e HTTP_PROXY -e HTTPS_PROXY -e NO_PROXY \
-              -e http_proxy -e https_proxy -e no_proxy \
-              "$@"
-          }
-          ci_run \
-            -v "$GITHUB_WORKSPACE:/workspace" -v "$STATE_DIR:/state" \
-            -e CI_PROJECT_CONFIG_JSON -e DEEPSEEK_API_KEY \
-            -w /workspace "$CI_IMAGE" summarize --services "$SERVICES" \
-            --changes-file /state/changes.json --output /state/release.md
+          test -n "${DEEPSEEK_API_KEY:-}" || { echo 'DEEPSEEK_API_KEY is required' >&2; exit 1; }
+          ci-templates summarize --config "$CI_PROJECT_CONFIG" --services "$SERVICES" --changes-file changes.json --output release.md
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: knowledge-core-web-release-notes-${{ github.run_id }}-${{ github.run_attempt }}
+          path: release.md
+          if-no-files-found: error
+          retention-days: 7
 
-  package-candidates:
-    needs: [plan, release-preflight, web-verify-build, release-notes]
-    if: always() && needs.plan.outputs.has_build_changes == 'true' && needs.release-preflight.result == 'success' && needs.web-verify-build.result == 'success' && needs.release-notes.result == 'success'
-    runs-on: [self-hosted, Linux, X64, devops]
-    timeout-minutes: 30
-    concurrency:
-      group: knowledge-core-web-dev-package
-      cancel-in-progress: true
-    outputs:
-      digest: ${{ steps.candidate.outputs.digest }}
+  prewarm-base-images:
+    needs: [plan, web-verify-build, release-notes]
+    if: always() && needs.plan.outputs.has_build_changes == 'true' && needs.web-verify-build.result == 'success' && needs.release-notes.result == 'success'
+    runs-on: [self-hosted, Linux, X64, hls-builder]
+    timeout-minutes: 20
+    environment: release
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 1
-      - name: Prepare registry credentials
+      - name: Prepare Harbor credentials
         env:
           HARBOR_DOCKER_CONFIG_JSON: ${{ secrets.HARBOR_DOCKER_CONFIG_JSON }}
           HARBOR_CA_PEM: ${{ secrets.HARBOR_CA_PEM }}
-          STATE_DIR: ${{ needs.plan.outputs.state_dir }}
         run: |
           set -euo pipefail
           umask 077
-          install -d "$STATE_DIR/harbor"
-          printf '%s' "$HARBOR_DOCKER_CONFIG_JSON" > "$STATE_DIR/harbor/config.json"
-          printf '%s' "$HARBOR_CA_PEM" > "$STATE_DIR/harbor/ca.crt"
-          test -s "$STATE_DIR/harbor/config.json"
-          test -s "$STATE_DIR/harbor/ca.crt"
-          echo "DOCKER_CONFIG=$STATE_DIR/harbor" >> "$GITHUB_ENV"
-          echo "HARBOR_CA_FILE=$STATE_DIR/harbor/ca.crt" >> "$GITHUB_ENV"
-      - name: Ensure pinned Node base image
-        run: |
-          set -euo pipefail
-          source_image="docker.m.daocloud.io/library/node:24.18.1-bookworm-slim@sha256:a09aabc645e86e81e23dab78e0c0f2eaa233cab4277c7188232181a1a8bd5d39"
-          destination_image="harbor.happyladysauce.local/knowledge-core/base/node:24.18.1-bookworm-slim"
-          base_image="$destination_image@sha256:a09aabc645e86e81e23dab78e0c0f2eaa233cab4277c7188232181a1a8bd5d39"
-          if docker buildx imagetools inspect "$base_image" >/dev/null 2>&1; then
-            echo "Pinned Node base image already exists in Harbor."
-            exit 0
+          install -d "$RUNNER_TEMP/harbor"
+          printf '%s' "$HARBOR_DOCKER_CONFIG_JSON" > "$RUNNER_TEMP/harbor/config.json"
+          printf '%s' "$HARBOR_CA_PEM" > "$RUNNER_TEMP/harbor/ca.crt"
+          test -s "$RUNNER_TEMP/harbor/config.json" && test -s "$RUNNER_TEMP/harbor/ca.crt"
+          if [[ -s /etc/ssl/certs/ca-certificates.crt ]]; then
+            cat /etc/ssl/certs/ca-certificates.crt "$RUNNER_TEMP/harbor/ca.crt" > "$RUNNER_TEMP/harbor/ca-bundle.crt"
+          else
+            cp "$RUNNER_TEMP/harbor/ca.crt" "$RUNNER_TEMP/harbor/ca-bundle.crt"
           fi
-          for attempt in 1 2 3; do
-            if docker buildx imagetools create --prefer-index=false \
-              --tag "$destination_image" "$source_image" &&
-              docker buildx imagetools inspect "$base_image" >/dev/null; then
-              exit 0
-            fi
-            if (( attempt < 3 )); then sleep "$((attempt * 5))"; fi
-          done
-          echo "Pinned Node base image prewarm failed after 3 attempts." >&2
-          exit 1
-      - name: Build immutable candidate
-        id: candidate
-        env:
-          STATE_DIR: ${{ needs.plan.outputs.state_dir }}
+          echo "DOCKER_CONFIG=$RUNNER_TEMP/harbor" >> "$GITHUB_ENV"
+          echo "SSL_CERT_FILE=$RUNNER_TEMP/harbor/ca-bundle.crt" >> "$GITHUB_ENV"
+          echo "CI_REGISTRY_CA_FILE=$RUNNER_TEMP/harbor/ca.crt" >> "$GITHUB_ENV"
+      - name: Verify BuildKit and prewarm configured base image
         run: |
           set -euo pipefail
-          socket="${DOCKER_HOST:-unix:///var/run/docker.sock}"
-          socket="${socket#unix://}"
-          KC_CACHE_ROOT="$(cd "$GITHUB_WORKSPACE/../.." && pwd)/_cache/knowledge-core"
-          install -d -m 0700 "$KC_CACHE_ROOT/buildx"
-          ci_run() {
-            docker run --rm --network host \
-              --user "$(id -u):$(id -g)" \
-              --group-add "$(stat -c '%g' "$socket")" \
-              -e HOME="${RUNNER_TEMP:-/tmp}" \
-              -e HTTP_PROXY -e HTTPS_PROXY -e NO_PROXY \
-              -e http_proxy -e https_proxy -e no_proxy \
-              "$@"
-          }
-          result="$(ci_run \
-            -v "$GITHUB_WORKSPACE:/workspace" -v "$socket:/var/run/docker.sock" \
-            -v "$DOCKER_CONFIG:/ci/docker:ro" -v "$HARBOR_CA_FILE:/etc/harbor-ca/ca.crt:ro" \
-            -v "$KC_CACHE_ROOT/buildx:/buildx" \
-            -e CI_PROJECT_CONFIG_JSON -e BUILD_CPU_PERCENT -e DOCKER_HOST=unix:///var/run/docker.sock \
-            -e DOCKER_CONFIG=/ci/docker -e BUILDX_CONFIG=/buildx \
-            -e CI_REGISTRY_CA_FILE=/etc/harbor-ca/ca.crt -e SSL_CERT_FILE=/etc/harbor-ca/ca.crt \
-            -w /workspace "$CI_IMAGE" build --service web --tag "sha-$GITHUB_SHA")"
+          docker info >/dev/null
+          ci-templates prewarm --config "$CI_PROJECT_CONFIG" --repo .
+
+  package-candidates:
+    needs: [plan, web-verify-build, prewarm-base-images]
+    if: always() && needs.plan.outputs.has_build_changes == 'true' && needs.web-verify-build.result == 'success' && needs.prewarm-base-images.result == 'success'
+    runs-on: [self-hosted, Linux, X64, hls-builder]
+    timeout-minutes: 30
+    environment: release
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        service: ${{ fromJSON(needs.plan.outputs.build_matrix) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: knowledge-core-web-verification-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .verification
+      - name: Prepare Harbor credentials
+        env:
+          HARBOR_DOCKER_CONFIG_JSON: ${{ secrets.HARBOR_DOCKER_CONFIG_JSON }}
+          HARBOR_CA_PEM: ${{ secrets.HARBOR_CA_PEM }}
+        run: |
+          set -euo pipefail
+          umask 077
+          install -d "$RUNNER_TEMP/harbor"
+          printf '%s' "$HARBOR_DOCKER_CONFIG_JSON" > "$RUNNER_TEMP/harbor/config.json"
+          printf '%s' "$HARBOR_CA_PEM" > "$RUNNER_TEMP/harbor/ca.crt"
+          test -s "$RUNNER_TEMP/harbor/config.json" && test -s "$RUNNER_TEMP/harbor/ca.crt"
+          if [[ -s /etc/ssl/certs/ca-certificates.crt ]]; then
+            cat /etc/ssl/certs/ca-certificates.crt "$RUNNER_TEMP/harbor/ca.crt" > "$RUNNER_TEMP/harbor/ca-bundle.crt"
+          else
+            cp "$RUNNER_TEMP/harbor/ca.crt" "$RUNNER_TEMP/harbor/ca-bundle.crt"
+          fi
+          echo "DOCKER_CONFIG=$RUNNER_TEMP/harbor" >> "$GITHUB_ENV"
+          echo "SSL_CERT_FILE=$RUNNER_TEMP/harbor/ca-bundle.crt" >> "$GITHUB_ENV"
+          echo "CI_REGISTRY_CA_FILE=$RUNNER_TEMP/harbor/ca.crt" >> "$GITHUB_ENV"
+      - name: Build immutable candidate
+        env:
+          SERVICE: ${{ matrix.service }}
+        run: |
+          set -euo pipefail
+          test "$SERVICE" = web
+          grep -qx 'verified-web' .verification/web-verification.txt
+          candidate_tag="$(python3 - <<'PY'
+          import os
+          from ci_templates.config import load_config
+          print(load_config(os.environ["CI_PROJECT_CONFIG"]).candidate_tag_template.format(sha=os.environ["GITHUB_SHA"]))
+          PY
+          )"
+          result="$(ci-templates build --config "$CI_PROJECT_CONFIG" --service "$SERVICE" --tag "$candidate_tag" --preserve-previous --reuse-existing)"
           echo "$result"
-          digest="$(jq -r '.digest' <<<"$result")"
-          [[ "$digest" == sha256:* ]]
-          [[ "$digest" != "sha256:0000000000000000000000000000000000000000000000000000000000000000" ]]
-          jq -n --arg digest "$digest" \
-            '{"knowledge-core-web":{"newName":"harbor.happyladysauce.local/knowledge-core/web","digest":$digest}}' \
-            > "$STATE_DIR/overrides.json"
-          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          jq -e '.digest | strings | test("^sha256:[0-9a-f]{64}$")' <<<"$result" >/dev/null
+          jq --arg source_sha "$GITHUB_SHA" --arg candidate_tag "$candidate_tag" \
+            '. + {source_sha:$source_sha,candidate_tag:$candidate_tag}' <<<"$result" > "candidate-$SERVICE.json"
+          jq -e '.kustomize_name and .image and .digest' "candidate-$SERVICE.json" >/dev/null
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: knowledge-core-web-candidate-${{ matrix.service }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: candidate-${{ matrix.service }}.json
+          if-no-files-found: error
+          retention-days: 7
 
   deploy-release:
-    needs: [plan, release-preflight, deploy-verify, web-verify-build, release-notes, package-candidates]
-    if: always() && needs.plan.outputs.has_changes == 'true' && needs.release-preflight.result == 'success' && (needs.deploy-verify.result == 'success' || needs.plan.outputs.deploy_changed == 'false') && (needs.web-verify-build.result == 'success' || needs.plan.outputs.has_build_changes == 'false') && needs.release-notes.result == 'success' && (needs.package-candidates.result == 'success' || needs.plan.outputs.has_build_changes == 'false')
-    permissions:
-      contents: write
-      statuses: write
-    runs-on: [self-hosted, Linux, X64, devops]
+    needs: [plan, deploy-verify, package-candidates, release-notes]
+    if: always() && needs.plan.outputs.has_changes == 'true' && (needs.deploy-verify.result == 'success' || needs.plan.outputs.deploy_changed == 'false') && needs.release-notes.result == 'success' && (needs.package-candidates.result == 'success' || needs.plan.outputs.has_build_changes == 'false')
+    runs-on: [self-hosted, Linux, X64, hls-standard]
     timeout-minutes: 45
     environment: release
     concurrency:
-      group: knowledge-core-web-dev-deploy
+      group: ${{ github.repository }}-${{ github.workflow }}-deploy-${{ github.ref }}
       cancel-in-progress: false
+    permissions:
+      actions: read
+      contents: write
+      statuses: write
+    outputs:
+      smoke_ok: ${{ steps.smoke.outputs.ok }}
+      candidates_promoted: ${{ steps.promote.outputs.ok }}
     steps:
       - name: Mint GitHub App token
         id: app-token
@@ -314,280 +286,175 @@ jobs:
         with:
           client-id: ${{ secrets.GH_APP_ID }}
           private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
-          owner: HappyLadySauceM
-          repositories: deploy
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }},deploy
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
-      - name: Prepare deployment credentials and verify Argo bootstrap
+          fetch-depth: 1
+          token: ${{ steps.app-token.outputs.token }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: knowledge-core-web-plan-${{ github.run_id }}-${{ github.run_attempt }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: knowledge-core-web-release-notes-${{ github.run_id }}-${{ github.run_attempt }}
+      - if: needs.plan.outputs.has_build_changes == 'true'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: knowledge-core-web-candidate-*-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .candidates
+          merge-multiple: true
+      - name: Prepare deployment credentials
         env:
           HARBOR_DOCKER_CONFIG_JSON: ${{ secrets.HARBOR_DOCKER_CONFIG_JSON }}
           HARBOR_CA_PEM: ${{ secrets.HARBOR_CA_PEM }}
           K3S_RELEASE_KUBECONFIG: ${{ secrets.K3S_RELEASE_KUBECONFIG }}
-          K3S_RELEASE_API_SERVER: ${{ vars.K3S_RELEASE_API_SERVER }}
-          WEB_IMAGE_DIGEST: ${{ needs.package-candidates.outputs.digest }}
-          STATE_DIR: ${{ needs.plan.outputs.state_dir }}
         run: |
           set -euo pipefail
           umask 077
-          install -d "$STATE_DIR/harbor"
-          printf '%s' "$HARBOR_DOCKER_CONFIG_JSON" > "$STATE_DIR/harbor/config.json"
-          printf '%s' "$HARBOR_CA_PEM" > "$STATE_DIR/harbor/ca.crt"
-          if [[ -r /etc/rancher/k3s/k3s.yaml ]]; then
-            sed 's#server: https://.*#server: https://127.0.0.1:6443#' /etc/rancher/k3s/k3s.yaml > "$STATE_DIR/kubeconfig"
+          install -d "$RUNNER_TEMP/release"
+          printf '%s' "$HARBOR_DOCKER_CONFIG_JSON" > "$RUNNER_TEMP/release/config.json"
+          printf '%s' "$HARBOR_CA_PEM" > "$RUNNER_TEMP/release/ca.crt"
+          printf '%s' "$K3S_RELEASE_KUBECONFIG" > "$RUNNER_TEMP/release/kubeconfig"
+          test -s "$RUNNER_TEMP/release/config.json" && test -s "$RUNNER_TEMP/release/ca.crt" && test -s "$RUNNER_TEMP/release/kubeconfig"
+          if [[ -s /etc/ssl/certs/ca-certificates.crt ]]; then
+            cat /etc/ssl/certs/ca-certificates.crt "$RUNNER_TEMP/release/ca.crt" > "$RUNNER_TEMP/release/ca-bundle.crt"
           else
-            printf '%s' "$K3S_RELEASE_KUBECONFIG" > "$STATE_DIR/kubeconfig"
+            cp "$RUNNER_TEMP/release/ca.crt" "$RUNNER_TEMP/release/ca-bundle.crt"
           fi
-          test -s "$STATE_DIR/harbor/config.json"
-          test -s "$STATE_DIR/harbor/ca.crt"
-          test -s "$STATE_DIR/kubeconfig"
-          [[ "$K3S_RELEASE_API_SERVER" == https://*:* ]]
+          echo "DOCKER_CONFIG=$RUNNER_TEMP/release" >> "$GITHUB_ENV"
+          echo "SSL_CERT_FILE=$RUNNER_TEMP/release/ca-bundle.crt" >> "$GITHUB_ENV"
+          echo "KUBECONFIG=$RUNNER_TEMP/release/kubeconfig" >> "$GITHUB_ENV"
+          echo "CI_REGISTRY_CA_FILE=$RUNNER_TEMP/release/ca.crt" >> "$GITHUB_ENV"
+          echo "PUBLIC_CA_FILE=$RUNNER_TEMP/release/ca-bundle.crt" >> "$GITHUB_ENV"
+      - name: Assemble digest-pinned image overrides
+        run: |
+          set -euo pipefail
           if [[ "${{ needs.plan.outputs.has_build_changes }}" == true ]]; then
-            [[ "$WEB_IMAGE_DIGEST" == sha256:* ]]
-          fi
-          kube_context="$(kubectl --kubeconfig="$STATE_DIR/kubeconfig" config current-context)"
-          kube_cluster="$(kubectl --kubeconfig="$STATE_DIR/kubeconfig" config view -o json | \
-            jq -r --arg context "$kube_context" '.contexts[] | select(.name == $context) | .context.cluster')"
-          test -n "$kube_cluster"
-          kubectl --kubeconfig="$STATE_DIR/kubeconfig" config set-cluster "$kube_cluster" \
-            --server="$K3S_RELEASE_API_SERVER" >/dev/null
-          release_host="${K3S_RELEASE_API_SERVER#https://}"
-          release_host="${release_host%:*}"
-          test -n "$release_host"
-          if [[ "${{ needs.plan.outputs.has_build_changes }}" == true ]]; then
-            jq -cn --arg digest "$WEB_IMAGE_DIGEST" \
-              '{"knowledge-core-web":{"newName":"harbor.happyladysauce.local/knowledge-core/web","digest":$digest}}' \
-              > "$STATE_DIR/overrides.json"
+            jq -s 'map(select(.service and .digest)) | map({key:.kustomize_name,value:{newName:(.image | sub(":[^:/@]+$"; "")),digest:.digest}}) | from_entries' .candidates/*.json > overrides.json
           else
-            printf '{}\n' > "$STATE_DIR/overrides.json"
+            printf '{}\n' > overrides.json
           fi
-          export KUBECONFIG="$STATE_DIR/kubeconfig"
-          echo "STATE_DIR=$STATE_DIR" >> "$GITHUB_ENV"
-          echo "DOCKER_CONFIG=$STATE_DIR/harbor" >> "$GITHUB_ENV"
-          echo "HARBOR_CA_FILE=$STATE_DIR/harbor/ca.crt" >> "$GITHUB_ENV"
-          echo "KUBECONFIG=$STATE_DIR/kubeconfig" >> "$GITHUB_ENV"
-          echo "PUBLIC_GATEWAY_ADDRESS=$release_host:30443" >> "$GITHUB_ENV"
-          echo "CI_GITOPS_IMAGE_OVERRIDES_JSON=$(jq -c . "$STATE_DIR/overrides.json")" >> "$GITHUB_ENV"
-          git fetch origin main dev
-          kubectl get application knowledge-core-web-dev -n argocd >/dev/null
-      - name: Promote GitOps snapshot
+          echo "CI_GITOPS_IMAGE_OVERRIDES_JSON=$(jq -c . overrides.json)" >> "$GITHUB_ENV"
+      - name: Promote GitOps snapshot with compare-and-swap retry
         id: gitops
         env:
           GITOPS_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           set -euo pipefail
-          socket="${DOCKER_HOST:-unix:///var/run/docker.sock}"
-          socket="${socket#unix://}"
-          ci_run() {
-            docker run --rm --network host \
-              --user "$(id -u):$(id -g)" \
-              --group-add "$(stat -c '%g' "$socket")" \
-              -e HOME="${RUNNER_TEMP:-/tmp}" \
-              -e HTTP_PROXY -e HTTPS_PROXY -e NO_PROXY \
-              -e http_proxy -e https_proxy -e no_proxy \
-              "$@"
-          }
           result=""
           for attempt in 1 2 3; do
-            if result="$(ci_run -v "$GITHUB_WORKSPACE:/workspace" \
-              -e CI_PROJECT_CONFIG_JSON -e BUILD_CPU_PERCENT -e CI_GITOPS_IMAGE_OVERRIDES_JSON -e GITOPS_TOKEN \
-              -w /workspace "$CI_IMAGE" promote-snapshot --source-sha "$GITHUB_SHA")"; then
-              break
-            fi
-            if (( attempt < 3 )); then
-              echo "GitOps promotion attempt $attempt failed; retrying." >&2
-              sleep "$((attempt * 5))"
-            fi
-          done
-          jq -e '.gitops_revision | strings | length == 40' <<<"$result" >/dev/null
-          jq -e '.gitops_base_revision | strings | length == 40' <<<"$result" >/dev/null
-          echo "$result"
-          echo "GITOPS_REVISION=$(jq -r '.gitops_revision' <<<"$result")" >> "$GITHUB_ENV"
-          echo "GITOPS_BASE_REVISION=$(jq -r '.gitops_base_revision' <<<"$result")" >> "$GITHUB_ENV"
-      - name: Mark dev deployment pending
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          socket="${DOCKER_HOST:-unix:///var/run/docker.sock}"
-          socket="${socket#unix://}"
-          ci_run() {
-            docker run --rm --network host \
-              --user "$(id -u):$(id -g)" \
-              --group-add "$(stat -c '%g' "$socket")" \
-              -e HOME="${RUNNER_TEMP:-/tmp}" \
-              -e HTTP_PROXY -e HTTPS_PROXY -e NO_PROXY \
-              -e http_proxy -e https_proxy -e no_proxy \
-              "$@"
-          }
-          ci_run -v "$GITHUB_WORKSPACE:/workspace" \
-            -e CI_PROJECT_CONFIG_JSON -e GITHUB_TOKEN -w /workspace "$CI_IMAGE" status \
-            --sha "$GITHUB_SHA" --state pending --description "Knowledge Core Web deployment started" \
-            --target-url "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-      - name: Wait for Argo CD
-        run: |
-          set -euo pipefail
-          socket="${DOCKER_HOST:-unix:///var/run/docker.sock}"
-          socket="${socket#unix://}"
-          ci_run() {
-            docker run --rm --network host \
-              --user "$(id -u):$(id -g)" \
-              --group-add "$(stat -c '%g' "$socket")" \
-              -e HOME="${RUNNER_TEMP:-/tmp}" \
-              -e HTTP_PROXY -e HTTPS_PROXY -e NO_PROXY \
-              -e http_proxy -e https_proxy -e no_proxy \
-              "$@"
-          }
-          for attempt in 1 2 3 4 5 6; do
-            if ci_run -v "$KUBECONFIG:/secrets/kubeconfig:ro" \
-              --entrypoint kubectl "$CI_IMAGE" --kubeconfig=/secrets/kubeconfig get --raw=/readyz >/dev/null; then
-              break
-            fi
-            if (( attempt == 6 )); then
-              echo "Kubernetes API remained unavailable from the release container." >&2
-              exit 1
-            fi
+            if result="$(ci-templates promote-snapshot --config "$CI_PROJECT_CONFIG" --source-sha "$GITHUB_SHA")"; then break; fi
+            [[ "$attempt" == 3 ]] && exit 1
             sleep "$((attempt * 2))"
           done
-          ci_run -v "$GITHUB_WORKSPACE:/workspace" \
-            -v "$KUBECONFIG:/secrets/kubeconfig:ro" \
-            -e CI_PROJECT_CONFIG_JSON -e BUILD_CPU_PERCENT -e CI_GITOPS_IMAGE_OVERRIDES_JSON -e KUBECONFIG=/secrets/kubeconfig \
-            -w /workspace "$CI_IMAGE" argo-wait --revision "$GITOPS_REVISION" --services "${{ needs.plan.outputs.release_services }}"
-      - name: Run post-deploy smoke
+          jq -e '.gitops_revision | strings | length == 40' <<<"$result" >/dev/null
+          echo "$result"
+          echo "gitops_revision=$(jq -r '.gitops_revision' <<<"$result")" >> "$GITHUB_OUTPUT"
+          echo "gitops_base_revision=$(jq -r '.gitops_base_revision' <<<"$result")" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository_owner }}/deploy
+          ref: ${{ steps.gitops.outputs.gitops_revision }}
+          token: ${{ steps.app-token.outputs.token }}
+          fetch-depth: 1
+          path: .gitops
+      - name: Validate and apply GitOps application set
         run: |
           set -euo pipefail
-          socket="${DOCKER_HOST:-unix:///var/run/docker.sock}"
-          socket="${socket#unix://}"
-          ci_run() {
-            docker run --rm --network host \
-              --user "$(id -u):$(id -g)" \
-              --group-add "$(stat -c '%g' "$socket")" \
-              -e HOME="${RUNNER_TEMP:-/tmp}" \
-              -e HTTP_PROXY -e HTTPS_PROXY -e NO_PROXY \
-              -e http_proxy -e https_proxy -e no_proxy \
-              "$@"
-          }
-          ci_run --entrypoint /bin/bash \
-            -v "$GITHUB_WORKSPACE:/workspace" -v "$KUBECONFIG:/secrets/kubeconfig:ro" \
-            -v "$HARBOR_CA_FILE:/etc/happyladysauce-ca/ca.crt:ro" \
-            -e KUBECONFIG=/secrets/kubeconfig \
-            -e PUBLIC_CA_FILE=/etc/happyladysauce-ca/ca.crt \
-            -e PUBLIC_GATEWAY_ADDRESS \
-            -w /workspace "$CI_IMAGE" ./scripts/smoke.sh
-          touch "$STATE_DIR/smoke.ok"
+          kubectl kustomize .gitops/Knowledge-Core-Web/argocd >/dev/null
+          kubectl apply -k .gitops/Knowledge-Core-Web/argocd
+      - name: Mark dev deployment pending
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: ci-templates status --config "$CI_PROJECT_CONFIG" --sha "$GITHUB_SHA" --state pending --description "Knowledge Core Web deployment started" --target-url "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+      - name: Wait for Argo CD
+        run: ci-templates argo-wait --config "$CI_PROJECT_CONFIG" --revision "${{ steps.gitops.outputs.gitops_revision }}" --services "${{ needs.plan.outputs.release_services }}"
+      - name: Run configured post-deploy smoke
+        id: smoke
+        env:
+          PUBLIC_CA_FILE: ${{ runner.temp }}/release/ca-bundle.crt
+        run: |
+          set -euo pipefail
+          ci-templates smoke --config "$CI_PROJECT_CONFIG"
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+          echo "SMOKE_OK=true" >> "$GITHUB_ENV"
       - name: Mark dev smoke successful
         env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          socket="${DOCKER_HOST:-unix:///var/run/docker.sock}"
-          socket="${socket#unix://}"
-          ci_run() {
-            docker run --rm --network host \
-              --user "$(id -u):$(id -g)" \
-              --group-add "$(stat -c '%g' "$socket")" \
-              -e HOME="${RUNNER_TEMP:-/tmp}" \
-              -e HTTP_PROXY -e HTTPS_PROXY -e NO_PROXY \
-              -e http_proxy -e https_proxy -e no_proxy \
-              "$@"
-          }
-          ci_run -v "$GITHUB_WORKSPACE:/workspace" \
-            -e CI_PROJECT_CONFIG_JSON -e GITHUB_TOKEN -w /workspace "$CI_IMAGE" status \
-            --sha "$GITHUB_SHA" --state success --description "Knowledge Core Web smoke passed" \
-            --target-url "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-      - name: Promote candidate and publish main release
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: ci-templates status --config "$CI_PROJECT_CONFIG" --sha "$GITHUB_SHA" --state success --description "Knowledge Core Web smoke passed" --target-url "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+      - name: Promote candidate tag and create release
+        id: promote
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          BUILD_SERVICES: ${{ needs.plan.outputs.build_services }}
         run: |
           set -euo pipefail
-          socket="${DOCKER_HOST:-unix:///var/run/docker.sock}"
-          socket="${socket#unix://}"
-          ci_run() {
-            docker run --rm --network host \
-              --user "$(id -u):$(id -g)" \
-              --group-add "$(stat -c '%g' "$socket")" \
-              -e HOME="${RUNNER_TEMP:-/tmp}" \
-              -e HTTP_PROXY -e HTTPS_PROXY -e NO_PROXY \
-              -e http_proxy -e https_proxy -e no_proxy \
-              "$@"
-          }
-          if [[ "${{ needs.plan.outputs.has_build_changes }}" == true ]]; then
-            ci_run \
-              -v "$GITHUB_WORKSPACE:/workspace" -v "$socket:/var/run/docker.sock" \
-              -v "$DOCKER_CONFIG:/ci/docker" -v "$HARBOR_CA_FILE:/etc/harbor-ca/ca.crt:ro" \
-              -e CI_PROJECT_CONFIG_JSON -e BUILD_CPU_PERCENT -e DOCKER_HOST=unix:///var/run/docker.sock -e DOCKER_CONFIG=/ci/docker \
-              -e CI_REGISTRY_CA_FILE=/etc/harbor-ca/ca.crt -e SSL_CERT_FILE=/etc/harbor-ca/ca.crt \
-              -w /workspace "$CI_IMAGE" promote-candidate --service web --tag "sha-$GITHUB_SHA"
-          fi
-          ci_run -v "$GITHUB_WORKSPACE:/workspace" -v "$STATE_DIR:/state" \
-            -e CI_PROJECT_CONFIG_JSON -e GITHUB_TOKEN -e CI_RELEASE_CHANGES_FILE=/state/changes.json \
-            -w /workspace "$CI_IMAGE" release --services "${{ needs.plan.outputs.release_services }}" --changes-file /state/changes.json --summary-file /state/release.md
-      - name: Roll back failed GitOps snapshot
-        if: failure() && env.GITOPS_REVISION != '' && env.GITOPS_REVISION != env.GITOPS_BASE_REVISION
+          candidate_tag="$(python3 - <<'PY'
+          import os
+          from ci_templates.config import load_config
+          print(load_config(os.environ["CI_PROJECT_CONFIG"]).candidate_tag_template.format(sha=os.environ["GITHUB_SHA"]))
+          PY
+          )"
+          IFS=',' read -r -a selected <<< "$BUILD_SERVICES"
+          for service in "${selected[@]}"; do
+            [[ -z "$service" ]] && continue
+            ci-templates promote-candidate --config "$CI_PROJECT_CONFIG" --service "$service" --tag "$candidate_tag"
+          done
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+          ci-templates release --config "$CI_PROJECT_CONFIG" --services "${{ needs.plan.outputs.release_services }}" --changes-file changes.json --summary-file release.md
+      - name: Roll back unverified GitOps snapshot
+        if: failure() && steps.gitops.outputs.gitops_revision != '' && steps.gitops.outputs.gitops_revision != steps.gitops.outputs.gitops_base_revision && env.SMOKE_OK != 'true'
         env:
           GITOPS_TOKEN: ${{ steps.app-token.outputs.token }}
-        run: |
-          set -euo pipefail
-          if [[ -f "$STATE_DIR/smoke.ok" ]]; then
-            echo "Smoke already passed; keep the verified deployment for an idempotent release retry."
-            exit 0
-          fi
-          socket="${DOCKER_HOST:-unix:///var/run/docker.sock}"
-          socket="${socket#unix://}"
-          ci_run() {
-            docker run --rm --network host \
-              --user "$(id -u):$(id -g)" \
-              --group-add "$(stat -c '%g' "$socket")" \
-              -e HOME="${RUNNER_TEMP:-/tmp}" \
-              -e HTTP_PROXY -e HTTPS_PROXY -e NO_PROXY \
-              -e http_proxy -e https_proxy -e no_proxy \
-              "$@"
-          }
-          ci_run -v "$GITHUB_WORKSPACE:/workspace" \
-            -e CI_PROJECT_CONFIG_JSON -e GITOPS_TOKEN -w /workspace "$CI_IMAGE" rollback-snapshot \
-            --revision "$GITOPS_REVISION"
+        run: ci-templates rollback-snapshot --config "$CI_PROJECT_CONFIG" --revision "${{ steps.gitops.outputs.gitops_revision }}"
       - name: Mark dev deployment failed
-        if: failure() && env.GITOPS_REVISION != ''
+        if: failure() && steps.gitops.outputs.gitops_revision != ''
         env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          socket="${DOCKER_HOST:-unix:///var/run/docker.sock}"
-          socket="${socket#unix://}"
-          ci_run() {
-            docker run --rm --network host \
-              --user "$(id -u):$(id -g)" \
-              --group-add "$(stat -c '%g' "$socket")" \
-              -e HOME="${RUNNER_TEMP:-/tmp}" \
-              -e HTTP_PROXY -e HTTPS_PROXY -e NO_PROXY \
-              -e http_proxy -e https_proxy -e no_proxy \
-              "$@"
-          }
-          ci_run -v "$GITHUB_WORKSPACE:/workspace" \
-            -e CI_PROJECT_CONFIG_JSON -e GITHUB_TOKEN -w /workspace "$CI_IMAGE" status \
-            --sha "$GITHUB_SHA" --state failure --description "Knowledge Core Web deployment failed" \
-            --target-url "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: ci-templates status --config "$CI_PROJECT_CONFIG" --sha "$GITHUB_SHA" --state failure --description "Knowledge Core Web deployment failed" --target-url "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
-  cleanup:
-    needs: [plan, release-preflight, deploy-verify, web-verify-build, release-notes, package-candidates, deploy-release]
-    if: always()
-    runs-on: [self-hosted, Linux, X64, devops]
+  cleanup-candidates:
+    needs: [plan, deploy-release]
+    if: always() && needs.plan.outputs.has_build_changes == 'true' && (needs.deploy-release.outputs.smoke_ok != 'true' || needs.deploy-release.outputs.candidates_promoted == 'true')
+    runs-on: [self-hosted, Linux, X64, hls-standard]
     timeout-minutes: 10
+    environment: release
     steps:
-      - name: Remove run credentials and prune dedicated Buildx cache
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+      - name: Prepare Harbor credentials
+        env:
+          HARBOR_DOCKER_CONFIG_JSON: ${{ secrets.HARBOR_DOCKER_CONFIG_JSON }}
+          HARBOR_CA_PEM: ${{ secrets.HARBOR_CA_PEM }}
         run: |
           set -euo pipefail
-          KC_CACHE_ROOT="$(cd "$GITHUB_WORKSPACE/../.." && pwd)/_cache/knowledge-core"
-          install -d -m 0700 "$KC_CACHE_ROOT/runs"
-          state_dir="$KC_CACHE_ROOT/runs/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          case "$state_dir" in
-            "$KC_CACHE_ROOT/runs/"[0-9]*-[0-9]*) ;;
-            *) echo "Refusing unsafe runner state path: $state_dir" >&2; exit 1 ;;
-          esac
-          if [[ -d "$state_dir" ]]; then
-            find "$state_dir" -type f -exec shred --force --remove --zero -- {} + || true
-            find "$state_dir" -type f -delete
-            find "$state_dir" -type l -delete
-            find "$state_dir" -depth -type d -empty -delete
+          umask 077
+          install -d "$RUNNER_TEMP/harbor"
+          printf '%s' "$HARBOR_DOCKER_CONFIG_JSON" > "$RUNNER_TEMP/harbor/config.json"
+          printf '%s' "$HARBOR_CA_PEM" > "$RUNNER_TEMP/harbor/ca.crt"
+          test -s "$RUNNER_TEMP/harbor/config.json" && test -s "$RUNNER_TEMP/harbor/ca.crt"
+          if [[ -s /etc/ssl/certs/ca-certificates.crt ]]; then
+            cat /etc/ssl/certs/ca-certificates.crt "$RUNNER_TEMP/harbor/ca.crt" > "$RUNNER_TEMP/harbor/ca-bundle.crt"
+          else
+            cp "$RUNNER_TEMP/harbor/ca.crt" "$RUNNER_TEMP/harbor/ca-bundle.crt"
           fi
-          docker buildx prune --force --builder ci-templates --max-used-space 8gb --min-free-space 50gb --reserved-space 2gb || true
+          echo "DOCKER_CONFIG=$RUNNER_TEMP/harbor" >> "$GITHUB_ENV"
+          echo "SSL_CERT_FILE=$RUNNER_TEMP/harbor/ca-bundle.crt" >> "$GITHUB_ENV"
+      - name: Remove candidate tag after promotion or rollback
+        env:
+          BUILD_SERVICES: ${{ needs.plan.outputs.build_services }}
+        run: |
+          set -euo pipefail
+          candidate_tag="$(python3 - <<'PY'
+          import os
+          from ci_templates.config import load_config
+          print(load_config(os.environ["CI_PROJECT_CONFIG"]).candidate_tag_template.format(sha=os.environ["GITHUB_SHA"]))
+          PY
+          )"
+          IFS=',' read -r -a selected <<< "$BUILD_SERVICES"
+          for service in "${selected[@]}"; do
+            [[ -z "$service" ]] && continue
+            ci-templates cleanup-candidate --config "$CI_PROJECT_CONFIG" --service "$service" --tag "$candidate_tag" || echo "::warning::candidate cleanup failed for $service"
+          done

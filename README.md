@@ -11,7 +11,7 @@ pnpm install
 pnpm dev
 ```
 
-依赖与 Node 发行包走 npmmirror（淘宝镜像）：仓库 `.npmrc` 指向 `https://registry.npmmirror.com`，CI 的 `actions/setup-node` 使用 `https://cdn.npmmirror.com/binaries/node`。自托管 runner 不恢复 GitHub Actions 的 pnpm 缓存（该下载会在 `results.actions.githubusercontent.com` 上卡死），改为 runner 本地 `_cache/knowledge-core/pnpm-store`。
+依赖与 Node 发行包走 npmmirror（淘宝镜像）：仓库 `.npmrc` 指向 `https://registry.npmmirror.com`，CI 的 `actions/setup-node` 使用 `https://cdn.npmmirror.com/binaries/node`。ARC runner 是按 job 隔离的临时 Pod，不依赖宿主机目录或 Docker socket；为避免跨宿主机缓存不一致，CI 不恢复 GitHub Actions 的 pnpm 缓存。
 
 访问 `/zh-CN` 或 `/en`。主题默认跟随系统，也可以在右上角手动切换。
 
@@ -26,7 +26,7 @@ pnpm e2e
 pnpm build-storybook
 ```
 
-生产镜像使用 Next.js standalone server 构建；运行时通过 `KNOWLEDGE_CORE_GATEWAY_URL` 访问集群内 Gateway。`dev` 分支发布会在质量门禁、Argo CD 健康检查和部署 Smoke 通过后，fast-forward 推送到 `main` 并创建版本 Release。
+生产镜像使用 Next.js standalone server 构建；运行时通过 `KNOWLEDGE_CORE_GATEWAY_URL` 访问集群内 Gateway。`.github/workflows/pipeline.yml` 从 `.ci/pipeline.yaml` 读取服务、Harbor、Argo 和 Smoke 配置：质量/部署任务使用 `hls-standard`，特权镜像构建使用 `hls-builder` 并按 matrix 并行（最多 4 个，standard 池最多 8 个）。校验结果、候选 digest 和 release 摘要通过 GitHub Artifacts 传递；`dev` 分支只有在 Argo CD 健康检查、部署 Smoke 和 Harbor API promotion 成功后才 fast-forward 到 `main` 并创建版本 Release。runner 不挂载宿主机 Docker socket。
 
 ## 边界约定
 

@@ -1,96 +1,51 @@
-name: Web CI
+name: web-pull-request
 
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main, dev]
-  workflow_call:
-    inputs:
-      runner_label:
-        required: false
-        type: string
   workflow_dispatch:
 
 permissions:
   contents: read
 
 env:
-  BUILD_CPU_PERCENT: "75"
-  # Reusable workflows do not inherit caller env; honor runner HTTP_PROXY on Node 24 actions.
-  # reusable workflow 不会继承调用方 env；让 Node 24 action 使用 runner 的 HTTP_PROXY。
+  CI_PROJECT_CONFIG: .ci/pipeline.yaml
   NODE_USE_ENV_PROXY: "1"
 
 concurrency:
-  group: web-ci-${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.repository }}-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   verify:
-    runs-on: ${{ inputs.runner_label || 'ubuntu-latest' }}
-    timeout-minutes: 15
+    runs-on: [self-hosted, Linux, X64, hls-standard]
+    timeout-minutes: 30
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@ff378ebe6b225b0680b81c1ad4498ae0d1d3a5e3 # v6.0.10
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          version: 10.31.0
-
-      # Self-hosted restores of GitHub Actions cache stall on
-      # results.actions.githubusercontent.com; keep a runner-local store instead.
-      # 自托管恢复 GitHub Actions 缓存会在 results.actions.githubusercontent.com 上卡死；改用 runner 本地 store。
-      - name: Use runner-local pnpm store
-        if: runner.environment == 'self-hosted'
+          node-version: 24.18.1
+          mirror: https://cdn.npmmirror.com/binaries/node
+      - name: Install pinned package manager
         run: |
           set -euo pipefail
-          store="$(cd "$GITHUB_WORKSPACE/../.." && pwd)/_cache/knowledge-core/pnpm-store"
-          mkdir -p "$store"
-          echo "npm_config_store_dir=$store" >> "$GITHUB_ENV"
-
-      - name: Setup Node
-        if: runner.environment != 'self-hosted'
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24.18.1
-          cache: pnpm
-          mirror: https://cdn.npmmirror.com/binaries/node
-
-      - name: Setup Node on self-hosted
-        if: runner.environment == 'self-hosted'
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24.18.1
-          mirror: https://cdn.npmmirror.com/binaries/node
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Lint
-        run: pnpm lint
-
-      - name: Typecheck
-        run: pnpm typecheck
-
-      - name: Unit tests
-        run: pnpm test
-
-      - name: Production build
-        run: pnpm build
-
-      - name: Install Playwright browser and system dependencies
-        if: runner.environment == 'github-hosted'
-        run: pnpm exec playwright install --with-deps chromium
-
+          corepack enable
+          corepack install --global pnpm@10.31.0
+      - name: Install dependencies and run quality gates
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile
+          pnpm lint
+          pnpm typecheck
+          pnpm test
+          pnpm build
       - name: Install Playwright browser
-        if: runner.environment == 'self-hosted'
         env:
           PLAYWRIGHT_DOWNLOAD_HOST: https://cdn.npmmirror.com/binaries/playwright
         run: pnpm exec playwright install chromium
-
       - name: End-to-end tests
         run: pnpm e2e
-
       - name: Storybook build
         run: pnpm build-storybook

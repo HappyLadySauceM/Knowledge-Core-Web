@@ -1,0 +1,73 @@
+schema_version: 2
+project: Knowledge-Core-Web
+source_repo: HappyLadySauceM/Knowledge-Core-Web
+gitops_repo: https://github.com/HappyLadySauceM/deploy.git
+gitops_path: Knowledge-Core-Web
+gitops_kustomization: dev/common/kustomization.yaml
+gitops_branch: main
+release_branch: main
+development_branch: dev
+git_identity_name: happyladysauce-ci
+git_identity_email: happyladysauce-ci@noreply.local
+shared_paths:
+  - .ci
+  - .github
+  - .dockerignore
+  - package.json
+  - pnpm-lock.yaml
+  - .npmrc
+  - next.config.ts
+  - tsconfig.json
+  - eslint.config.mjs
+  - vitest.config.ts
+  - playwright.config.ts
+  - postcss.config.mjs
+  - docker
+  - scripts
+  - public
+  - VERSION
+harbor_registry: harbor.happyladysauce.local
+harbor_project: knowledge-core
+argocd_server: argocd.happyladysauce.local
+argocd_namespace: argocd
+argocd_application: knowledge-core-web-dev
+application_suffix: -dev
+smoke_namespace: knowledge-core-dev
+smoke_command:
+  - ./scripts/smoke.sh
+smoke_endpoints: []
+smoke_env:
+  APPLICATION_NAMESPACE: knowledge-core-dev
+  WEB_SERVICE_NAME: knowledge-core-web
+  WEB_SERVICE_PORT: "3000"
+  WEB_HEALTH_PATH: /api/health
+  WEB_HEALTH_STATUS: ok
+  WEB_HOME_PATH: /en
+  WEB_HOME_MARKER: Pages worth reading
+  WEB_BFF_PATH: /api/bff/gateway/api/v1/documents?limit=1
+  GATEWAY_SERVICE_NAME: knowledge-core-gateway
+  GATEWAY_SERVICE_PORT: "8080"
+  GATEWAY_API_PATH: /api/v1/documents?limit=1
+  PUBLIC_HOST: knowledge-core.happyladysauce.local
+  PUBLIC_GATEWAY_ADDRESS: higress-gateway.higress-system.svc.cluster.local:443
+  PUBLIC_GATEWAY_IP: ""
+  PUBLIC_HOME_PATH: /zh-CN
+  PUBLIC_HOME_MARKER: 最新文章
+  PUBLIC_API_PATH: /api/v1/documents?limit=1
+release_model: git-independent-service-aggregate
+aggregate_release_prefix: knowledge-core-web
+aggregate_version_file: VERSION
+release_language: zh-CN
+deepseek_model: deepseek-v4-flash
+base_images:
+  - source: docker.m.daocloud.io/library/node:24.18.1-bookworm-slim@sha256:a09aabc645e86e81e23dab78e0c0f2eaa233cab4277c7188232181a1a8bd5d39
+    destination: harbor.happyladysauce.local/knowledge-core/base/node:24.18.1-bookworm-slim
+services:
+  - name: web
+    source_path: src
+    version_file: VERSION
+    dockerfile: docker/web/Dockerfile
+    context: .
+    image_repository: harbor.happyladysauce.local/knowledge-core/web
+    deploy_snapshot: deploy/web
+    kustomize_name: knowledge-core-web
