@@ -26,7 +26,7 @@ pnpm e2e
 pnpm build-storybook
 ```
 
-生产镜像使用 Next.js standalone server 构建；运行时通过 `KNOWLEDGE_CORE_GATEWAY_URL` 访问集群内 Gateway。`.github/workflows/pipeline.yml` 从 `.ci/pipeline.yaml` 读取服务、Harbor、Argo 和 Smoke 配置：质量/部署任务使用 `hls-standard`，特权镜像构建使用 `hls-builder`；当前单节点 canary 为 4 个 8 CPU / 8Gi standard 和 1 个 builder。语言/工具缓存在节点 `/var/lib/hls-ci-cache`，不使用 GitHub Actions cache。Playwright CI 的 `webServer.timeout` 为 180s。Runner 的外部 HTTP(S) 流量由集群环境注入的 sing-box 代理控制，集群 API 使用 `https://kubernetes.default.svc:443`。校验结果、候选 digest 和 release 摘要通过 GitHub Artifacts 传递；`dev` 分支只有在 Argo CD 健康检查、部署 Smoke 和 Harbor API promotion 成功后才 fast-forward 到 `main` 并创建版本 Release。runner 不挂载宿主机 Docker socket。
+生产镜像使用 Next.js standalone server 构建；运行时通过 `KNOWLEDGE_CORE_GATEWAY_URL` 访问集群内 Gateway。`.github/workflows/pipeline.yml` 从 `.ci/pipeline.yaml` 读取服务、Harbor、Argo 和 Smoke 配置：质量/部署任务使用 `hls-standard`，特权镜像构建使用 `hls-builder`；当前单节点 canary 为 4 个 8 CPU / 8Gi standard 和 1 个 builder。`.github/workflows/feishu-notify.yml` 把流水线结论、PR、Issue 和 Release 推到飞书自定义机器人，使用组织 `ci-templates` 复合 Action 与组织 secrets `FEISHU_WEBHOOK_URL` / `FEISHU_WEBHOOK_SECRET`，不使用 `release` environment。语言/工具缓存在节点 `/var/lib/hls-ci-cache`，不使用 GitHub Actions cache。Playwright CI 的 `webServer.timeout` 为 180s。Runner 的外部 HTTP(S) 流量由集群环境注入的 sing-box 代理控制，集群 API 使用 `https://kubernetes.default.svc:443`。校验结果、候选 digest 和 release 摘要通过 GitHub Artifacts 传递；`dev` 分支只有在 Argo CD 健康检查、部署 Smoke 和 Harbor API promotion 成功后才 fast-forward 到 `main` 并创建版本 Release。runner 不挂载宿主机 Docker socket。
 
 ## 边界约定
 

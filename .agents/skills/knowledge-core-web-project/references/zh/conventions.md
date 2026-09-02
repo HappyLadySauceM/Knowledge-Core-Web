@@ -20,4 +20,4 @@ storybook-static、test-results、playwright-report 和 .next 是生成物。
 
 密钥只能通过 GitHub 或 Kubernetes Secrets 注入；不要提交明文密钥。认证 cookie 为 HttpOnly，HTTPS 请求时 Secure，access 使用 SameSite Lax，refresh 使用 Strict。日志、指标和客户端包不得包含会话凭证。
 
-<!-- fact:security.secrets-and-config status:verified sources:user-confirmed -->
+<!-- fact:security.secrets-and-config status:verified sources:README.md#section, user-confirmed -->

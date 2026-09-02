@@ -1,0 +1,36 @@
+name: feishu-notify
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    types: [completed]
+  pull_request:
+    types: [opened, reopened, closed, ready_for_review, converted_to_draft]
+  pull_request_review:
+    types: [submitted]
+  issues:
+    types: [opened, reopened, closed]
+  issue_comment:
+    types: [created]
+  release:
+    types: [published]
+
+# Read the completed workflow payload; do not write the repository.
+# 读取已结束的 workflow payload；不写仓库。
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  notify:
+    if: github.event_name != 'workflow_run' || github.event.workflow.name != 'feishu-notify'
+    runs-on: hls-standard
+    timeout-minutes: 5
+    steps:
+      - name: Notify Feishu
+        # Pin to the ci-templates commit that added .github/actions/feishu-notify.
+        # 钉死到加入 feishu-notify Action 的 ci-templates 提交。
+        uses: HappyLadySauceM/ci-templates/.github/actions/feishu-notify@2d06b38ff477b97b93bbd0ee7a7e51d5724d3cfe
+        with:
+          webhook: ${{ secrets.FEISHU_WEBHOOK_URL }}
+          secret: ${{ secrets.FEISHU_WEBHOOK_SECRET }}
