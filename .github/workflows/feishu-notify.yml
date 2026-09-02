@@ -3,6 +3,11 @@ name: feishu-notify
 on:
   workflow_dispatch:
   workflow_run:
+    # Only completed CI/publish runs; listing names is required by GitHub.
+    # 只听已结束的 CI/发布；GitHub 要求必须写出 workflow 名称。
+    workflows:
+      - knowledge-core-web-pipeline
+      - web-pull-request
     types: [completed]
   pull_request:
     types: [opened, reopened, closed, ready_for_review, converted_to_draft]
