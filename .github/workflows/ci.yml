@@ -13,6 +13,9 @@ permissions:
 env:
   CI_PROJECT_CONFIG: .ci/pipeline.yaml
   NODE_USE_ENV_PROXY: "1"
+  NPM_CONFIG_REGISTRY: "https://registry.npmmirror.com"
+  COREPACK_NPM_REGISTRY: "https://registry.npmmirror.com"
+  PLAYWRIGHT_DOWNLOAD_HOST: "https://cdn.npmmirror.com/binaries/playwright"
 
 concurrency:
   group: ${{ github.repository }}-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}

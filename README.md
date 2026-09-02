@@ -26,7 +26,7 @@ pnpm e2e
 pnpm build-storybook
 ```
 
-生产镜像使用 Next.js standalone server 构建；运行时通过 `KNOWLEDGE_CORE_GATEWAY_URL` 访问集群内 Gateway。`.github/workflows/pipeline.yml` 从 `.ci/pipeline.yaml` 读取服务、Harbor、Argo 和 Smoke 配置：质量/部署任务使用 `hls-standard`，特权镜像构建使用 `hls-builder` 并按 matrix 并行（最多 4 个，standard 池最多 8 个）。校验结果、候选 digest 和 release 摘要通过 GitHub Artifacts 传递；`dev` 分支只有在 Argo CD 健康检查、部署 Smoke 和 Harbor API promotion 成功后才 fast-forward 到 `main` 并创建版本 Release。runner 不挂载宿主机 Docker socket。
+生产镜像使用 Next.js standalone server 构建；运行时通过 `KNOWLEDGE_CORE_GATEWAY_URL` 访问集群内 Gateway。`.github/workflows/pipeline.yml` 从 `.ci/pipeline.yaml` 读取服务、Harbor、Argo 和 Smoke 配置：质量/部署任务使用 `hls-standard`，特权镜像构建使用 `hls-builder`；当前单节点 canary 为 5 个 standard 和 1 个 builder。Runner 的外部 HTTP(S) 流量由集群环境注入的 sing-box 代理控制，集群 API 使用 `https://kubernetes.default.svc:443`。校验结果、候选 digest 和 release 摘要通过 GitHub Artifacts 传递；`dev` 分支只有在 Argo CD 健康检查、部署 Smoke 和 Harbor API promotion 成功后才 fast-forward 到 `main` 并创建版本 Release。runner 不挂载宿主机 Docker socket。
 
 ## 边界约定
 
