@@ -166,8 +166,8 @@ jobs:
           retention-days: 7
 
   prewarm-base-images:
-    needs: [plan, web-verify-build, release-notes]
-    if: always() && needs.plan.outputs.has_build_changes == 'true' && needs.web-verify-build.result == 'success' && needs.release-notes.result == 'success'
+    needs: [plan]
+    if: needs.plan.outputs.has_build_changes == 'true'
     runs-on: hls-builder
     timeout-minutes: 20
     environment: release

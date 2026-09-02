@@ -279,7 +279,7 @@
     },
     {
       "id": "cicd.pipeline",
-      "revision": 45,
+      "revision": 47,
       "section": "workflows",
       "sources": [
         {
@@ -296,6 +296,10 @@
         },
         {
           "kind": "user",
+          "reference": "user-confirmed-4x8-hostpath-ubuntu-runtime"
+        },
+        {
+          "kind": "user",
           "reference": "user-confirmed-cicd-ratio-and-source-deploy-sync"
         },
         {
@@ -304,8 +308,8 @@
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-08-31T06:03:25Z",
-      "value": "Public PR and main verification remain on GitHub-hosted runners. Pushes to dev run the trusted release chain on the organization self-hosted runner label `devops`: build immutable Harbor images with parallelism set to 75% of effective runner CPUs (affinity and cgroup quota), update the source-owned deploy snapshot in GitOps, sync Argo dev, run smoke checks, then promote by fast-forwarding main and releasing. `BUILD_CPU_PERCENT` changes the ratio and `BUILD_JOBS` is only a bounded emergency override. Control-image containers run as the current runner UID and GID (`docker run --user $(id -u):$(id -g)` with a writable HOME); Docker config is mounted at `/ci/docker` rather than `/root/.docker`; runner cache is `$GITHUB_WORKSPACE/../../_cache/knowledge-core`. The host runner uses systemd `HTTP_PROXY=http://127.0.0.1:10991` (sing-box HTTP inbound) with `NO_PROXY` for Harbor, cluster, and npmmirror, and `NODE_USE_ENV_PROXY=1` so Node 24 actions including `create-github-app-token` post honor that proxy; `ci_run` forwards proxy variables into the control image. Self-hosted Node/pnpm/Playwright downloads use npmmirror (`cdn.npmmirror.com` / `registry.npmmirror.com`) and do not restore GitHub Actions package caches. Knowledge-Core-Web/deploy is the editable deployment source and CI synchronizes it automatically to HappyLadySauceM/deploy/Knowledge-Core-Web; deploy-only changes skip image builds while still validating the overlay, updating GitOps, waiting for Argo, running smoke, and promoting main. The self-hosted cleanup is restricted to per-run state and the dedicated Buildx cache. Failures support rollback, and force-push is forbidden."
+      "updatedAt": "2026-09-02T10:37:17Z",
+      "value": "Public PR and `main` verification run `.github/workflows/ci.yml` on ARC `hls-standard`. Pushes to `dev` run `.github/workflows/pipeline.yml` from `.ci/pipeline.yaml` on ARC: `verify`/`deploy`/`smoke`/`release` use `hls-standard` (non-privileged containers, 8 CPU / 8Gi, min 1 max 4; namespace quota 32 CPU / 32Gi); `package` uses `hls-builder` (privileged Docker-in-Docker 5Gi plus runner 1Gi, min 0 max 1). Workflow `max-parallel` is 1. The standard namespace is Pod Security privileged only so runners can share hostPath `/var/lib/hls-ci-cache` at `/cache`; GitHub Actions cache is not used. External HTTP(S) uses `HTTP_PROXY`/`HTTPS_PROXY`=`http://10.42.0.1:10991` from the `arc-proxy` Secret; `NO_PROXY` covers localhost, loopbacks, `.svc`, the Kubernetes API, Harbor, Argo, and `.happyladysauce.local`. `NODE_USE_ENV_PROXY=1` remains so Node 24 actions including `create-github-app-token` post honor that proxy. Node/pnpm/Playwright downloads use npmmirror (`cdn.npmmirror.com` / `registry.npmmirror.com`) and do not restore GitHub Actions package caches. Playwright CI `webServer.timeout` is 180s with `PORT=3000` and `HOSTNAME=0.0.0.0`. `prewarm-base-images` needs only `plan` so it runs beside `web-verify-build`. `deploy-release` checkouts use `fetch-depth: 0` so `origin/main` ancestry checks succeed. Knowledge-Core-Web/deploy is the editable deployment source and CI synchronizes it automatically to HappyLadySauceM/deploy/Knowledge-Core-Web using the `knowledge-core-web-release` ServiceAccount and in-cluster `https://kubernetes.default.svc:443`; deploy-only changes skip image builds while still validating the overlay, updating GitOps, waiting for Argo, running smoke, and promoting main. Harbor tags candidates by commit SHA, then promotes `:dev` and updates `:previous` after smoke. Failures support rollback, and force-push is forbidden. The `release` environment is limited to `dev` and supplies GH App credentials, kubeconfig, and `DEEPSEEK_API_KEY`."
     },
     {
       "id": "constraints.project",
@@ -459,15 +463,19 @@
     },
     {
       "id": "environment.setup",
-      "revision": 43,
+      "revision": 48,
       "section": "environment",
       "sources": [
+        {
+          "kind": "detected",
+          "reference": ".github/workflows/pipeline.yml"
+        },
         {
           "kind": "detected",
           "reference": ".npmrc"
         },
         {
-          "detail": "evidence-sha256:e5d420ee4e9d0e8d3549a92c220967e8e0049fe744f564ae103050874a37f4de",
+          "detail": "evidence-sha256:d4e598fbbba5ba61d9f1f40aab1c585b5a8eb120dba48f134b67cd7ac2ecb167",
           "kind": "documented",
           "reference": "README.md#section"
         },
@@ -481,16 +489,20 @@
         },
         {
           "kind": "user",
+          "reference": "user-confirmed-4x8-hostpath-ubuntu-runtime"
+        },
+        {
+          "kind": "user",
           "reference": "user-confirmed-web-bff-session-layer"
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-08-30T15:21:36Z",
-      "value": "Use Node.js 24.18.1 (CI pin; package engines allow >=20.9.0) and pnpm 10.31.0. Install with `pnpm install --frozen-lockfile`. Package tarballs use npmmirror via `.npmrc` (`registry=https://registry.npmmirror.com`). Self-hosted CI downloads Node from `https://cdn.npmmirror.com/binaries/node`, skips GitHub Actions pnpm cache restore, and stores pnpm content under `$GITHUB_WORKSPACE/../../_cache/knowledge-core/pnpm-store`. Playwright browsers on self-hosted CI use `PLAYWRIGHT_DOWNLOAD_HOST=https://cdn.npmmirror.com/binaries/playwright`. Inject non-secret `KNOWLEDGE_CORE_GATEWAY_URL` for the BFF; the local default is http://localhost:8080. Cluster overlay deploy/web/overlay/dev points at knowledge-core-gateway in namespace knowledge-core-dev. Secrets stay in GitHub or Kubernetes Secrets. The BFF also accepts KNOWLEDGE_CORE_WEB_ORIGIN for exact Origin checks and KNOWLEDGE_CORE_GATEWAY_TIMEOUT_MS for the outbound timeout budget."
+      "updatedAt": "2026-09-02T10:39:35Z",
+      "value": "Use Node.js 24.18.1 (CI pin; package engines allow >=20.9.0) and pnpm 10.31.0. Install with `pnpm install --frozen-lockfile`. Package tarballs use npmmirror via `.npmrc` (`registry=https://registry.npmmirror.com`). ARC CI (`hls-standard` / `hls-builder` ephemeral pods) downloads Node from `https://cdn.npmmirror.com/binaries/node`, skips GitHub Actions pnpm cache restore, and uses the node-local hostPath cache at `/cache` (`NPM_CONFIG_CACHE`, `PLAYWRIGHT_BROWSERS_PATH`, `RUNNER_TOOL_CACHE`). Playwright browsers on ARC CI use `PLAYWRIGHT_DOWNLOAD_HOST=https://cdn.npmmirror.com/binaries/playwright`. Playwright CI `webServer.timeout` is 180s with `PORT=3000` and `HOSTNAME=0.0.0.0`. Inject non-secret `KNOWLEDGE_CORE_GATEWAY_URL` for the BFF; the local default is http://localhost:8080. Cluster overlay deploy/web/overlay/dev points at knowledge-core-gateway in namespace knowledge-core-dev. Secrets stay in GitHub or Kubernetes Secrets. The BFF also accepts KNOWLEDGE_CORE_WEB_ORIGIN for exact Origin checks and KNOWLEDGE_CORE_GATEWAY_TIMEOUT_MS for the outbound timeout budget."
     },
     {
       "id": "environment.toolchains",
-      "revision": 39,
+      "revision": 49,
       "section": "environment",
       "sources": [
         {
@@ -507,7 +519,7 @@
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-08-30T14:37:30Z",
+      "updatedAt": "2026-09-02T10:40:03Z",
       "value": [
         {
           "manifest": "package.json",
@@ -615,7 +627,7 @@
     },
     {
       "id": "workflows.build",
-      "revision": 39,
+      "revision": 49,
       "section": "workflows",
       "sources": [
         {
@@ -632,7 +644,7 @@
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-08-30T14:37:30Z",
+      "updatedAt": "2026-09-02T10:40:03Z",
       "value": {
         "npm:build": {
           "command": "next build",
@@ -646,7 +658,7 @@
     },
     {
       "id": "workflows.development",
-      "revision": 39,
+      "revision": 49,
       "section": "workflows",
       "sources": [
         {
@@ -667,7 +679,7 @@
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-08-30T14:37:30Z",
+      "updatedAt": "2026-09-02T10:40:03Z",
       "value": {
         "npm:dev": {
           "command": "next dev",
@@ -681,7 +693,7 @@
     },
     {
       "id": "workflows.quality",
-      "revision": 39,
+      "revision": 49,
       "section": "workflows",
       "sources": [
         {
@@ -698,7 +710,7 @@
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-08-30T14:37:30Z",
+      "updatedAt": "2026-09-02T10:40:03Z",
       "value": {
         "npm:lint": {
           "command": "eslint .",
@@ -712,7 +724,7 @@
     },
     {
       "id": "workflows.test",
-      "revision": 39,
+      "revision": 49,
       "section": "workflows",
       "sources": [
         {
@@ -729,7 +741,7 @@
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-08-30T14:37:30Z",
+      "updatedAt": "2026-09-02T10:40:03Z",
       "value": {
         "npm:test": {
           "command": "vitest run",
@@ -752,11 +764,11 @@
     "profile": "generic",
     "slug": "knowledge-core-web"
   },
-  "revision": 45,
+  "revision": 49,
   "scan": {
-    "fingerprint": "d7a949e28a68b440bf62ea04028eb4b534a12cb8d47a4b17ae0c8bbcc0278532",
-    "inventoryCount": 112
+    "fingerprint": "1ea2acc2aa5ae83f5681120cbe7accf571a1ce0b59fb34f0f22e7ee90f143bb3",
+    "inventoryCount": 705
   },
   "schemaVersion": 3,
-  "updatedAt": "2026-08-31T06:03:25Z"
+  "updatedAt": "2026-09-02T10:40:03Z"
 }
