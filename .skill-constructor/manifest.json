@@ -279,7 +279,7 @@
     },
     {
       "id": "cicd.pipeline",
-      "revision": 47,
+      "revision": 50,
       "section": "workflows",
       "sources": [
         {
@@ -300,6 +300,10 @@
         },
         {
           "kind": "user",
+          "reference": "user-confirmed-builder-12-12-plus-12-2"
+        },
+        {
+          "kind": "user",
           "reference": "user-confirmed-cicd-ratio-and-source-deploy-sync"
         },
         {
@@ -308,8 +312,8 @@
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-09-02T10:37:17Z",
-      "value": "Public PR and `main` verification run `.github/workflows/ci.yml` on ARC `hls-standard`. Pushes to `dev` run `.github/workflows/pipeline.yml` from `.ci/pipeline.yaml` on ARC: `verify`/`deploy`/`smoke`/`release` use `hls-standard` (non-privileged containers, 8 CPU / 8Gi, min 1 max 4; namespace quota 32 CPU / 32Gi); `package` uses `hls-builder` (privileged Docker-in-Docker 5Gi plus runner 1Gi, min 0 max 1). Workflow `max-parallel` is 1. The standard namespace is Pod Security privileged only so runners can share hostPath `/var/lib/hls-ci-cache` at `/cache`; GitHub Actions cache is not used. External HTTP(S) uses `HTTP_PROXY`/`HTTPS_PROXY`=`http://10.42.0.1:10991` from the `arc-proxy` Secret; `NO_PROXY` covers localhost, loopbacks, `.svc`, the Kubernetes API, Harbor, Argo, and `.happyladysauce.local`. `NODE_USE_ENV_PROXY=1` remains so Node 24 actions including `create-github-app-token` post honor that proxy. Node/pnpm/Playwright downloads use npmmirror (`cdn.npmmirror.com` / `registry.npmmirror.com`) and do not restore GitHub Actions package caches. Playwright CI `webServer.timeout` is 180s with `PORT=3000` and `HOSTNAME=0.0.0.0`. `prewarm-base-images` needs only `plan` so it runs beside `web-verify-build`. `deploy-release` checkouts use `fetch-depth: 0` so `origin/main` ancestry checks succeed. Knowledge-Core-Web/deploy is the editable deployment source and CI synchronizes it automatically to HappyLadySauceM/deploy/Knowledge-Core-Web using the `knowledge-core-web-release` ServiceAccount and in-cluster `https://kubernetes.default.svc:443`; deploy-only changes skip image builds while still validating the overlay, updating GitOps, waiting for Argo, running smoke, and promoting main. Harbor tags candidates by commit SHA, then promotes `:dev` and updates `:previous` after smoke. Failures support rollback, and force-push is forbidden. The `release` environment is limited to `dev` and supplies GH App credentials, kubeconfig, and `DEEPSEEK_API_KEY`."
+      "updatedAt": "2026-09-02T11:00:18Z",
+      "value": "Public PR and `main` verification run `.github/workflows/ci.yml` on ARC `hls-standard`. Pushes to `dev` run `.github/workflows/pipeline.yml` from `.ci/pipeline.yaml` on ARC: `verify`/`deploy`/`smoke`/`release` use `hls-standard` (non-privileged containers, 8 CPU / 8Gi, min 1 max 4; namespace quota 32 CPU / 32Gi); `package` uses `hls-builder` (privileged Docker-in-Docker 12Gi plus runner 2Gi, both 12 CPU so the pod is 24 CPU / 14Gi, min 0 max 1). Workflow `max-parallel` is 1. The standard namespace is Pod Security privileged only so runners can share hostPath `/var/lib/hls-ci-cache` at `/cache`; GitHub Actions cache is not used. External HTTP(S) uses `HTTP_PROXY`/`HTTPS_PROXY`=`http://10.42.0.1:10991` from the `arc-proxy` Secret; `NO_PROXY` covers localhost, loopbacks, `.svc`, the Kubernetes API, Harbor, Argo, and `.happyladysauce.local`. `NODE_USE_ENV_PROXY=1` remains so Node 24 actions including `create-github-app-token` post honor that proxy. Node/pnpm/Playwright downloads use npmmirror (`cdn.npmmirror.com` / `registry.npmmirror.com`) and do not restore GitHub Actions package caches. Playwright CI `webServer.timeout` is 180s with `PORT=3000` and `HOSTNAME=0.0.0.0`. `prewarm-base-images` needs only `plan` so it runs beside `web-verify-build`. `deploy-release` checkouts use `fetch-depth: 0` so `origin/main` ancestry checks succeed. Knowledge-Core-Web/deploy is the editable deployment source and CI synchronizes it automatically to HappyLadySauceM/deploy/Knowledge-Core-Web using the `knowledge-core-web-release` ServiceAccount and in-cluster `https://kubernetes.default.svc:443`; deploy-only changes skip image builds while still validating the overlay, updating GitOps, waiting for Argo, running smoke, and promoting main. Harbor tags candidates by commit SHA, then promotes `:dev` and updates `:previous` after smoke. Failures support rollback, and force-push is forbidden. The `release` environment is limited to `dev` and supplies GH App credentials, kubeconfig, and `DEEPSEEK_API_KEY`."
     },
     {
       "id": "constraints.project",
@@ -764,11 +768,11 @@
     "profile": "generic",
     "slug": "knowledge-core-web"
   },
-  "revision": 49,
+  "revision": 50,
   "scan": {
     "fingerprint": "1ea2acc2aa5ae83f5681120cbe7accf571a1ce0b59fb34f0f22e7ee90f143bb3",
     "inventoryCount": 705
   },
   "schemaVersion": 3,
-  "updatedAt": "2026-09-02T10:40:03Z"
+  "updatedAt": "2026-09-02T11:00:18Z"
 }
