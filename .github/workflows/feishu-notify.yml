@@ -2,13 +2,6 @@ name: feishu-notify
 
 on:
   workflow_dispatch:
-  workflow_run:
-    # Only completed CI/publish runs; listing names is required by GitHub.
-    # 只听已结束的 CI/发布；GitHub 要求必须写出 workflow 名称。
-    workflows:
-      - knowledge-core-web-pipeline
-      - web-pull-request
-    types: [completed]
   pull_request:
     types: [opened, reopened, closed, ready_for_review, converted_to_draft]
   pull_request_review:
@@ -20,22 +13,21 @@ on:
   release:
     types: [published]
 
-# Read the completed workflow payload; do not write the repository.
-# 读取已结束的 workflow payload；不写仓库。
+# Read the event payload; do not write the repository.
+# 读取事件正文；不写仓库。
 permissions:
   contents: read
   actions: read
 
 jobs:
   notify:
-    if: github.event_name != 'workflow_run' || github.event.workflow.name != 'feishu-notify'
     runs-on: hls-standard
     timeout-minutes: 5
     steps:
       - name: Notify Feishu
-        # Pin to the ci-templates commit that added .github/actions/feishu-notify.
-        # 钉死到加入 feishu-notify Action 的 ci-templates 提交。
-        uses: HappyLadySauceM/ci-templates/.github/actions/feishu-notify@2d06b38ff477b97b93bbd0ee7a7e51d5724d3cfe
+        # Pin to the ci-templates commit that added CI-card notify.py.
+        # 钉死到加入 CI 卡片的 ci-templates 提交。
+        uses: HappyLadySauceM/ci-templates/.github/actions/feishu-notify@91a1f006e0e24ae7ae8d5d98e78f41fa8e06b69e
         with:
           webhook: ${{ secrets.FEISHU_WEBHOOK_URL }}
           secret: ${{ secrets.FEISHU_WEBHOOK_SECRET }}

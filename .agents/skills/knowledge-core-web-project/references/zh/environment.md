@@ -17,9 +17,9 @@
 
 ### test
 
-- **evidenceCommand**: pnpm lint && pnpm typecheck && pnpm test && pnpm build
+- **evidenceCommand**: pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm e2e && pnpm build-storybook
 - **kind**: github-actions
-- **path**: .github/workflows/ci.yml
+- **path**: .github/workflows/pipeline.yml
 
 ### production
 
