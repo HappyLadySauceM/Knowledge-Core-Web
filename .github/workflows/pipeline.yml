@@ -283,6 +283,7 @@ jobs:
     outputs:
       smoke_ok: ${{ steps.smoke.outputs.ok }}
       candidates_promoted: ${{ steps.promote.outputs.ok }}
+      release_tag: ${{ steps.promote.outputs.release_tag }}
     steps:
       - name: Mint GitHub App token
         id: app-token
@@ -419,7 +420,20 @@ jobs:
             ci-templates promote-candidate --config "$CI_PROJECT_CONFIG" --service "$service" --tag "$candidate_tag"
           done
           echo "ok=true" >> "$GITHUB_OUTPUT"
-          ci-templates release --config "$CI_PROJECT_CONFIG" --services "${{ needs.plan.outputs.release_services }}" --changes-file changes.json --summary-file release.md
+          release_json="$(ci-templates release --config "$CI_PROJECT_CONFIG" --services "${{ needs.plan.outputs.release_services }}" --changes-file changes.json --summary-file release.md)"
+          printf '%s\n' "$release_json"
+          RELEASE_JSON="$release_json" python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os
+          tag = ""
+          for line in os.environ.get("RELEASE_JSON", "").splitlines():
+              line = line.strip()
+              if line.startswith("{") and line.endswith("}"):
+                  try:
+                      tag = json.loads(line).get("release") or tag
+                  except json.JSONDecodeError:
+                      pass
+          print("release_tag=%s" % (tag or ""))
+          PY
       - name: Roll back unverified GitOps snapshot
         if: failure() && steps.gitops.outputs.gitops_revision != '' && steps.gitops.outputs.gitops_revision != steps.gitops.outputs.gitops_base_revision && env.SMOKE_OK != 'true'
         env:
@@ -481,16 +495,26 @@ jobs:
     needs: [plan, deploy-release, cleanup-candidates]
     runs-on: hls-standard
     timeout-minutes: 5
+    environment: release
     permissions:
       actions: read
       contents: read
     steps:
-      - name: Notify Feishu
+      - name: Notify Feishu CI
         # Pin to the ci-templates commit that added CI-card notify.py.
         # 钉死到加入 CI 卡片的 ci-templates 提交。
-        uses: HappyLadySauceM/ci-templates/.github/actions/feishu-notify@91a1f006e0e24ae7ae8d5d98e78f41fa8e06b69e
+        uses: HappyLadySauceM/ci-templates/.github/actions/feishu-notify@8f39e9543c2d0e1bd26c5fcba8de6fbea5cfe8c6
         with:
           webhook: ${{ secrets.FEISHU_WEBHOOK_URL }}
           secret: ${{ secrets.FEISHU_WEBHOOK_SECRET }}
           card: ci
+          deepseek-api-key: ${{ secrets.DEEPSEEK_API_KEY }}
           conclusion: ${{ contains(needs.*.result, 'failure') && 'failure' || contains(needs.*.result, 'cancelled') && 'cancelled' || 'success' }}
+      - name: Notify Feishu release
+        if: needs.deploy-release.result == 'success' && needs.deploy-release.outputs.release_tag != ''
+        uses: HappyLadySauceM/ci-templates/.github/actions/feishu-notify@8f39e9543c2d0e1bd26c5fcba8de6fbea5cfe8c6
+        with:
+          webhook: ${{ secrets.FEISHU_WEBHOOK_URL }}
+          secret: ${{ secrets.FEISHU_WEBHOOK_SECRET }}
+          card: release
+          release-tag: ${{ needs.deploy-release.outputs.release_tag }}
