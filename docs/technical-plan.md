@@ -27,7 +27,7 @@ Browser → Next.js BFF（HttpOnly cookie）→ Knowledge-Core Gateway → Ident
 - Go Gateway、Identity、Knowledge 与 Rust Collaboration 的领域边界保持不变。
 - 前端不绕过 Gateway 直接访问服务数据库、Redis、NATS 或协作实例。
 - IDL 与服务端生成代码仍归 Knowledge-Core 所有；Web 只消费稳定 HTTP/RPC 映射。
-- 协作 WebSocket ticket 必须为短时、一次性、绑定用户/文档/实例的 opaque 值。
+- 协作 WebSocket ticket 必须为短时、一次性、绑定用户/文档的 opaque 值；实例选择由 Higress 对 `/v1/documents/{id}` 做通常 locality hash，不进入浏览器契约。
 - 任何跨服务写入、事件发布、索引任务都遵循幂等、重试、死信和补偿约束。
 
 ## 路由壳

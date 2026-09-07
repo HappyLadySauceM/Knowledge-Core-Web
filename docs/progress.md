@@ -75,7 +75,7 @@ Knowledge-Core-Web: pnpm build-storybook 通过
 - Next.js standalone 运行输出、`/api/health` 健康入口和非 root 生产容器。
 - Kubernetes Deployment/Service、Harbor digest 镜像组件和 `knowledge-core-web-dev` Argo Application。
 - `dev` 分支候选镜像、GitOps 快照、Argo 健康、部署 Smoke、DeepSeek 摘要、fast-forward `main` 和版本 Release 流水线。
-- `knowledge-core.happyladysauce.local` 首页切换 Web；`/api/v1/*` 保留直达 Gateway，协作 WebSocket 路径保持不变。
+- `knowledge-core.happyladysauce.local` 首页切换 Web；`/api/v1/*` 保留直达 Gateway，协作 WebSocket 使用统一 `/v1/documents/{id}` 路径，断线会重新申请 ticket 并复用本地 Y.Doc。
 
 ### 待完成
 

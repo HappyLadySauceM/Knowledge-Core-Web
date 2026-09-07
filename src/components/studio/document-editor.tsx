@@ -14,12 +14,22 @@ import { IndexeddbPersistence } from "y-indexeddb";
 import * as Y from "yjs";
 import { apiFetch } from "@/lib/api/client";
 import type { CollaborationSession, DocumentSummary } from "@/lib/api/types";
-import { KnowledgeWebSocketProvider } from "@/lib/collaboration/provider";
+import { KnowledgeWebSocketProvider, type CollaborationStatus } from "@/lib/collaboration/provider";
 
 function base64url(value: Uint8Array) {
   let binary = "";
   value.forEach((item) => { binary += String.fromCharCode(item); });
   return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+}
+
+function statusLabel(status: CollaborationStatus) {
+  switch (status) {
+    case "connecting": return "Connecting…";
+    case "syncing": return "Syncing…";
+    case "connected": return "Connected";
+    case "reconnecting": return "Reconnecting…";
+    case "offline": return "Offline";
+  }
 }
 
 export function DocumentEditor({ documentId }: { documentId: string }) {
@@ -51,19 +61,25 @@ export function DocumentEditor({ documentId }: { documentId: string }) {
     const persistence = new IndexeddbPersistence(`knowledge-core:${documentId}`, ydoc);
     void persistence.whenSynced.then(async () => {
       try {
-        const session = await apiFetch<CollaborationSession>(`/api/v1/studio/documents/${documentId}/collaboration-sessions`, { method: "POST", body: "{}" });
         if (!active) return;
-        const nextProvider = new KnowledgeWebSocketProvider(session.websocket_url, session.ticket, session.subprotocol, ydoc);
+        const nextProvider = new KnowledgeWebSocketProvider(
+          () => apiFetch<CollaborationSession>(`/api/v1/studio/documents/${documentId}/collaboration-sessions`, { method: "POST", body: "{}" }),
+          ydoc,
+          {
+            onStatus: (nextStatus) => { if (active) setStatus(statusLabel(nextStatus)); },
+            onError: (reason) => { if (active) setError(reason.message); },
+          },
+        );
         currentProvider = nextProvider;
-        nextProvider.awareness.on("change", () => setStatus("Connected"));
-        setDoc(ydoc); setProvider(nextProvider); setStatus("Syncing…");
+        setDoc(ydoc); setProvider(nextProvider);
       } catch (reason) { if (active) { setError(reason instanceof Error ? reason.message : "Unable to start collaboration"); setStatus("Offline"); } }
     });
     return () => { active = false; currentProvider?.destroy(); persistence.destroy(); ydoc.destroy(); };
     // The provider is intentionally created once for this document.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [documentId]);
 
+  // Y.Doc is mutable; transaction is the explicit invalidation signal for its state vector.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const stateVector = useMemo(() => (doc ? base64url(Y.encodeStateVector(doc)) : ""), [doc, transaction]);
 
   async function publish() {
@@ -77,5 +93,5 @@ export function DocumentEditor({ documentId }: { documentId: string }) {
     finally { setPublishing(false); }
   }
 
-  return <section className="document-editor-shell"><div className="document-editor-toolbar"><span className="editor-status">{status}</span><button type="button" onClick={() => void publish()} disabled={publishing || !editor || status === "Offline"}>{publishing ? "Publishing…" : published ? "Published" : "Publish"}</button></div>{error && <p className="form-error">{error}</p>}<EditorContent editor={editor} /></section>;
+  return <section className="document-editor-shell"><div className="document-editor-toolbar"><span className="editor-status">{status}</span>{status === "Offline" && provider && <button type="button" onClick={() => { setError(""); provider.retry(); }}>Retry</button>}<button type="button" onClick={() => void publish()} disabled={publishing || !editor || status === "Offline"}>{publishing ? "Publishing…" : published ? "Published" : "Publish"}</button></div>{error && <p className="form-error">{error}</p>}<EditorContent editor={editor} /></section>;
 }
