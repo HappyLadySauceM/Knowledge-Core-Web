@@ -33,6 +33,10 @@ function statusLabel(status: CollaborationStatus) {
 }
 
 export function DocumentEditor({ documentId }: { documentId: string }) {
+  return <DocumentEditorSession key={documentId} documentId={documentId} />;
+}
+
+function DocumentEditorSession({ documentId }: { documentId: string }) {
   const [doc, setDoc] = useState<Y.Doc | null>(null);
   const [provider, setProvider] = useState<KnowledgeWebSocketProvider | null>(null);
   const [sessionEpoch, setSessionEpoch] = useState(0);
@@ -56,9 +60,6 @@ export function DocumentEditor({ documentId }: { documentId: string }) {
 
   useEffect(() => {
     let active = true;
-    setDoc(null);
-    setProvider(null);
-    setStatus("Connecting…");
     const ydoc = new Y.Doc();
     let currentProvider: KnowledgeWebSocketProvider | null = null;
     void apiFetch<DocumentSummary>(`/api/v1/studio/documents/${documentId}`).then((value) => { if (active) setMetadataRevision(value.metadata_revision); }).catch(() => undefined);
@@ -77,7 +78,12 @@ export function DocumentEditor({ documentId }: { documentId: string }) {
               setStatus("Offline");
               setError("Document was restored; reloading the collaboration state…");
               void persistence.clearData().then(() => {
-                if (active) setSessionEpoch((value) => value + 1);
+                if (active) {
+                  setDoc(null);
+                  setProvider(null);
+                  setStatus("Connecting…");
+                  setSessionEpoch((value) => value + 1);
+                }
               }).catch((reason: unknown) => {
                 if (active) setError(reason instanceof Error ? reason.message : "Unable to reset collaboration state");
               });
