@@ -22,6 +22,7 @@ export type CollaborationStatus = "connecting" | "syncing" | "connected" | "reco
 type ProviderOptions = {
   onStatus?: (status: CollaborationStatus) => void;
   onError?: (error: Error) => void;
+  onTerminal?: (closeCode: number) => void;
 };
 
 export function reconnectDelay(attempt: number, random = Math.random()): number {
@@ -38,6 +39,7 @@ export class KnowledgeWebSocketProvider {
   private readonly onAwareness: ({ added, updated, removed }: { added: number[]; updated: number[]; removed: number[] }) => void;
   private readonly notifyStatus: (status: CollaborationStatus) => void;
   private readonly notifyError: (error: Error) => void;
+  private readonly notifyTerminal: (closeCode: number) => void;
   private socket: WebSocket | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private connectTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -55,6 +57,7 @@ export class KnowledgeWebSocketProvider {
     this.awareness.setLocalStateField("user", { name: "You", color: "#6678ff" });
     this.notifyStatus = options.onStatus ?? (() => undefined);
     this.notifyError = options.onError ?? (() => undefined);
+    this.notifyTerminal = options.onTerminal ?? (() => undefined);
     this.onUpdate = (update, origin) => {
       if (origin !== this) this.sendUpdate(update);
     };
@@ -129,7 +132,6 @@ export class KnowledgeWebSocketProvider {
       syncProtocol.writeSyncStep1(encoder, this.doc);
       socket.send(encoding.toUint8Array(encoder));
       this.onAwareness({ added: [this.awareness.clientID], updated: [], removed: [] });
-      this.setStatus("connected");
     });
     socket.addEventListener("message", (event) => this.receive(event.data, socket));
     socket.addEventListener("close", (event) => {
@@ -180,6 +182,7 @@ export class KnowledgeWebSocketProvider {
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
     this.detach();
+    if (closeCode !== undefined) this.notifyTerminal(closeCode);
     if (closeCode !== undefined) error.message = `${error.message} (${closeCode})`;
     this.notifyError(error);
     this.notifyStatus("offline");
@@ -203,12 +206,14 @@ export class KnowledgeWebSocketProvider {
     }
     if (this.socket !== socket) return;
     const decoder = decoding.createDecoder(new Uint8Array(data));
+    let receivedSyncMessage = false;
     while (decoding.hasContent(decoder)) {
       const type = decoding.readVarUint(decoder);
       if (type === syncMessage) {
         const encoder = encoding.createEncoder();
         encoding.writeVarUint(encoder, syncMessage);
         syncProtocol.readSyncMessage(decoder, encoder, this.doc, this);
+        receivedSyncMessage = true;
         if (encoding.length(encoder) > 1 && this.socket === socket && socket.readyState === WebSocket.OPEN) {
           socket.send(encoding.toUint8Array(encoder));
         }
@@ -220,6 +225,7 @@ export class KnowledgeWebSocketProvider {
       }
       break;
     }
+    if (receivedSyncMessage) this.setStatus("connected");
   }
 
   private sendUpdate(update: Uint8Array) {
