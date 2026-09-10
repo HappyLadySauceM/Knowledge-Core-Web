@@ -1,5 +1,5 @@
 import { gatewayFetch } from "@/lib/api/gateway";
-import type { DocumentDetail, DocumentPage, SiteProfile } from "@/lib/api/types";
+import { DocumentDetailSchema, DocumentPageSchema, SiteProfileSchema, type DocumentDetail, type DocumentPage, type SiteProfile } from "@/lib/api/types";
 
 export const fallbackSiteProfile: SiteProfile = {
   title: "HappyLadySauce",
@@ -13,7 +13,7 @@ export const fallbackSiteProfile: SiteProfile = {
 
 export async function getSiteProfile(): Promise<SiteProfile> {
   try {
-    const profile = await gatewayFetch<SiteProfile>("/api/v1/site-profile");
+    const profile = SiteProfileSchema.parse(await gatewayFetch<unknown>("/api/v1/site-profile"));
     const heroImage = profile.hero_image_url?.startsWith("/") || /^https?:\/\//.test(profile.hero_image_url ?? "") ? profile.hero_image_url : fallbackSiteProfile.hero_image_url;
     return { ...fallbackSiteProfile, ...profile, hero_image_url: heroImage || fallbackSiteProfile.hero_image_url };
   } catch {
@@ -25,7 +25,7 @@ export async function getPublishedDocuments(query?: string): Promise<DocumentPag
   const params = new URLSearchParams({ limit: "12" });
   if (query?.trim()) params.set("q", query.trim());
   try {
-    return await gatewayFetch<DocumentPage>(`/api/v1/documents?${params.toString()}`);
+    return DocumentPageSchema.parse(await gatewayFetch<unknown>(`/api/v1/documents?${params.toString()}`));
   } catch {
     return { items: [], page: { has_more: false } };
   }
@@ -33,7 +33,7 @@ export async function getPublishedDocuments(query?: string): Promise<DocumentPag
 
 export async function getPublishedDocument(slug: string): Promise<DocumentDetail | null> {
   try {
-    return await gatewayFetch<DocumentDetail>(`/api/v1/documents/${encodeURIComponent(slug)}`);
+    return DocumentDetailSchema.parse(await gatewayFetch<unknown>(`/api/v1/documents/${encodeURIComponent(slug)}`));
   } catch {
     return null;
   }

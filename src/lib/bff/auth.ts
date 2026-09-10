@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { maxGatewayBodyBytes } from "@/lib/bff/config";
-import { copyGatewayJSON, copyGatewayResponse, refreshGateway, requestGateway, transportErrorResponse } from "@/lib/bff/gateway";
+import { copyGatewayResponse, refreshGateway, requestGateway, transportErrorResponse } from "@/lib/bff/gateway";
 import { invalidGatewayResponse, problemResponse } from "@/lib/bff/problem";
 import { contentLengthTooLarge, requireSameOrigin } from "@/lib/bff/security";
 import { applySessionCookies, authenticationFromGateway, clearSessionCookies, readSession, sessionAuthentication } from "@/lib/bff/session";
@@ -57,7 +57,13 @@ async function handleRegister(request: NextRequest) {
 	const result = await requestGateway(request, ["api", "v1", "users"], { method: "POST", body: new TextEncoder().encode(JSON.stringify(payload)).buffer, includeSession: false, retryUnauthorized: false });
 	if (result.transportError) return transportErrorResponse(result.transportError);
 	if (!result.response) return invalidGatewayResponse();
-	return copyGatewayJSON(result.response);
+	if (!result.response.ok) return copyGatewayResponse(result.response);
+	const data = await result.response.json().catch(() => null);
+	const authentication = authenticationFromGateway(data);
+	if (!authentication) return invalidGatewayResponse();
+	const response = NextResponse.json(sessionAuthentication(authentication), { status: 201 });
+	applySessionCookies(response, authentication);
+	return response;
 }
 
 async function handleSession(request: NextRequest) {
@@ -155,6 +161,7 @@ async function handleMapped(request: NextRequest, name: string, id?: string) {
 	if (!result.response) return invalidGatewayResponse();
 	const response = await copyGatewayResponse(result.response);
 	applyResultCookies(response, result);
+	if (name === "deactivate" && result.response.ok) clearSessionCookies(response);
 	return response;
 }
 

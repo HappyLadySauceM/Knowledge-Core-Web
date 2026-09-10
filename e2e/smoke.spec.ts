@@ -23,6 +23,11 @@ test("protects the studio shell when no session cookie exists", async ({ page })
   await expect(page).toHaveURL(/\/zh-CN\/login\?next=%2Fzh-CN%2Fstudio/);
 });
 
+test("keeps the requested locale when protecting authenticated pages", async ({ page }) => {
+  await page.goto("/en/studio/media");
+  await expect(page).toHaveURL(/\/en\/login\?next=%2Fen%2Fstudio%2Fmedia/);
+});
+
 test("keeps an action token in the confirmation form without consuming it on GET", async ({ page }) => {
   await page.goto("/zh-CN/verify-email?token=ka1.test-token");
   await expect(page.locator('input[name="token"]')).toHaveValue("ka1.test-token");

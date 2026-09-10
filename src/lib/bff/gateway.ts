@@ -86,6 +86,7 @@ export async function requestGateway(request: NextRequest, segments: string[], o
 		method,
 		headers: requestHeaders(request, includeSession ? accessToken : undefined),
 		body: method === "GET" || method === "HEAD" ? undefined : body,
+		redirect: "manual",
 	});
 
 	let response: Response;

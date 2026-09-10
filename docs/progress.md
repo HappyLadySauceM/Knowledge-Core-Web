@@ -1,5 +1,21 @@
 # 执行记录
 
+## 2026-09-09：Gateway API 产品闭环
+
+### 已完成
+
+- 建立 documents、folders、members、versions、media 与 admin 领域客户端和 Zod 响应契约。
+- 完成 Studio 文档、文件夹、回收站、成员、版本、发布与实时协作入口。
+- 完成通用媒体库 multipart 上传、状态筛选、下载、回收和恢复。
+- 完成 site、email、ai 管理配置及 revision delivery 状态展示。
+- 收紧 BFF 注册凭证、账号停用 Cookie 清理和附件 303 转发行为。
+- 通用附件列表补充向后兼容的稳定游标分页。
+
+### 范围边界
+
+- 旧文档附件 CRUD 不新增操作界面，只保留公开文章已有附件的读取兼容。
+- Gateway 健康探针仍由部署和 Smoke 使用，不进入产品导航。
+
 ## 2026-08-20：Stage 0 前端骨架
 
 ### 已完成

@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { ThemeProvider } from "@/components/theme-provider";
+import { AppProviders } from "@/components/app-providers";
 import { SiteHeader } from "@/components/site-header";
 import { isLocale, locales } from "@/lib/i18n";
 import { getSiteProfile } from "@/lib/site";
@@ -25,8 +26,8 @@ export default async function LocaleLayout({
 
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-      <SiteHeader locale={locale} profile={profile} />
-      <main>{children}</main>
+      <AppProviders><SiteHeader locale={locale} profile={profile} />
+      <main>{children}</main></AppProviders>
     </ThemeProvider>
   );
 }

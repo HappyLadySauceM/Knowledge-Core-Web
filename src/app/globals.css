@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./connected.css";
 
 :root { --background: #f4f6fb; --foreground: #161821; --surface: #ffffff; --surface-2: #e9edf7; --muted: #687087; --line: rgba(48, 58, 91, .14); --primary: #475bff; --primary-strong: #293be0; --accent: #ffbf48; }
 .dark { --background: #0a0d14; --foreground: #f4f6fc; --surface: #111722; --surface-2: #192131; --muted: #8f9bb4; --line: rgba(165, 181, 220, .17); --primary: #7590ff; --primary-strong: #93a6ff; --accent: #ffc848; }

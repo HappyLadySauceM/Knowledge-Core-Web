@@ -66,6 +66,15 @@ describe("web BFF session layer", () => {
 		expect(response.headers.get("set-cookie")).toBeNull();
 	});
 
+	it("confines registration tokens to HttpOnly cookies", async () => {
+		fetchMock.mockResolvedValueOnce(jsonResponse(authentication, 201));
+		const response = await handleAuth(request("/api/bff/auth/register", { method: "POST", origin: webOrigin, body: JSON.stringify({ username: "alice", email: "alice@example.com", password: "password" }) }), ["register"]);
+
+		expect(response.status).toBe(201);
+		expect(await response.json()).toEqual({ user: authentication.user, expires_at: authentication.expires_at });
+		expect(response.headers.get("set-cookie")).toContain("HttpOnly");
+	});
+
 	it("rejects cross-origin mutations before calling Gateway", async () => {
 		const response = await handleAuth(request("/api/bff/auth/login", { method: "POST", origin: "https://evil.test", body: "{}" }), ["login"]);
 
@@ -134,5 +143,22 @@ describe("web BFF session layer", () => {
 		expect(response.status).toBe(502);
 		expect(response.headers.get("set-cookie")).toContain("kc_access=;");
 		expect(response.headers.get("set-cookie")).toContain("kc_refresh=;");
+	});
+
+	it("preserves attachment content redirects for the browser", async () => {
+		fetchMock.mockResolvedValueOnce(new Response(null, { status: 303, headers: { location: "https://objects.test/file" } }));
+		const response = await handleGateway(request("/api/bff/gateway/api/v1/attachments/file-id/content", { cookies: "kc_access=access-old" }), { params: Promise.resolve({ path: ["api", "v1", "attachments", "file-id", "content"] }) });
+
+		expect(response.status).toBe(303);
+		expect(response.headers.get("location")).toBe("https://objects.test/file");
+		expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ redirect: "manual" });
+	});
+
+	it("clears cookies after account deactivation", async () => {
+		fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }));
+		const response = await handleAuth(request("/api/bff/auth/deactivate", { method: "POST", origin: webOrigin, cookies: "kc_access=access-old; kc_refresh=refresh-old", body: JSON.stringify({ password: "password" }) }), ["deactivate"]);
+
+		expect(response.status).toBe(200);
+		expect(response.headers.get("set-cookie")).toContain("kc_access=;");
 	});
 });

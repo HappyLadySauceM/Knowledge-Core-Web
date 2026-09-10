@@ -93,7 +93,7 @@ async function uploadParts(file: File, record: UploadRecord, onProgress: (comple
   await Promise.all([worker(), worker(), worker()]);
 }
 
-export function AttachmentUploader({ labels }: { labels?: Partial<Record<"title" | "hint" | "choose" | "uploading" | "success" | "resume" | "failed", string>> }) {
+export function AttachmentUploader({ labels, onComplete }: { labels?: Partial<Record<"title" | "hint" | "choose" | "uploading" | "success" | "resume" | "failed", string>>; onComplete?: () => void }) {
   const input = useRef<HTMLInputElement>(null);
   const [state, setState] = useState<"idle" | "uploading" | "success" | "error">("idle");
   const [progress, setProgress] = useState(0);
@@ -118,6 +118,7 @@ export function AttachmentUploader({ labels }: { labels?: Partial<Record<"title"
       setProgress(100);
       setMessage(`${labels?.success ?? "Upload complete"} · ${attachment.status}`);
       setState("success");
+      onComplete?.();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : labels?.failed ?? "Upload failed");
       setState("error");

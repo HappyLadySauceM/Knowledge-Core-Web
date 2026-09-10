@@ -1,4 +1,5 @@
-import type { Attachment, RichTextNode } from "@/lib/api/types";
+/* eslint-disable @next/next/no-img-element -- attachment URLs are short-lived redirects and cannot use the static Next image loader. */
+import type { RichTextNode } from "@/lib/api/types";
 
 function safeHref(value: unknown) {
   if (typeof value !== "string") return undefined;
@@ -6,8 +7,8 @@ function safeHref(value: unknown) {
   try { const url = new URL(value); return ["http:", "https:", "mailto:"].includes(url.protocol) ? value : undefined; } catch { return undefined; }
 }
 
-function renderNode(node: RichTextNode, index: number, attachments: Map<string, Attachment>): React.ReactNode {
-  const children = node.content?.map((child, childIndex) => renderNode(child, childIndex, attachments));
+function renderNode(node: RichTextNode, index: number): React.ReactNode {
+  const children = node.content?.map((child, childIndex) => renderNode(child, childIndex));
   const text = node.text ?? children;
   const attrs = node.attrs ?? {};
   if (node.type === "text") return (node.marks ?? []).reduce<React.ReactNode>((value, mark) => {
@@ -28,14 +29,12 @@ function renderNode(node: RichTextNode, index: number, attachments: Map<string, 
   if (node.type === "hardBreak") return <br key={key} />;
   if (node.type === "image") {
     const attachmentId = typeof attrs.attachmentId === "string" ? attrs.attachmentId : undefined;
-    const attachment = attachmentId ? attachments.get(attachmentId) : undefined;
-    const src = safeHref(attachment?.content_url) ?? (attachmentId ? `/api/bff/gateway/api/v1/attachments/${encodeURIComponent(attachmentId)}/content` : undefined);
-    return src ? <img key={key} src={src} alt={typeof attrs.alt === "string" ? attrs.alt : attachment?.filename ?? ""} loading="lazy" /> : null;
+    const src = attachmentId ? `/api/bff/gateway/api/v1/attachments/${encodeURIComponent(attachmentId)}/content` : undefined;
+    return src ? <img key={key} src={src} alt={typeof attrs.alt === "string" ? attrs.alt : ""} loading="lazy" /> : null;
   }
   return <p key={key}>{text}</p>;
 }
 
-export function RichText({ content, attachments = [] }: { content: RichTextNode[]; attachments?: Attachment[] }) {
-  const attachmentMap = new Map(attachments.map((attachment) => [attachment.id, attachment]));
-  return <div className="rich-text">{content.map((node, index) => renderNode(node, index, attachmentMap))}</div>;
+export function RichText({ content }: { content: RichTextNode[] }) {
+  return <div className="rich-text">{content.map((node, index) => renderNode(node, index))}</div>;
 }
