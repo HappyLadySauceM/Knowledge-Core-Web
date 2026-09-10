@@ -66,13 +66,24 @@ describe("web BFF session layer", () => {
 		expect(response.headers.get("set-cookie")).toBeNull();
 	});
 
-	it("confines registration tokens to HttpOnly cookies", async () => {
-		fetchMock.mockResolvedValueOnce(jsonResponse(authentication, 201));
+	it("returns the registered user without establishing a session", async () => {
+		const user = {
+			id: "1",
+			username: "alice",
+			email: "alice@example.com",
+			role: "user",
+			status: "pending_verification",
+			avatar: "",
+			bio: "",
+			created_at: "2026-01-01T00:00:00Z",
+			updated_at: "2026-01-01T00:00:00Z",
+		};
+		fetchMock.mockResolvedValueOnce(jsonResponse(user, 201));
 		const response = await handleAuth(request("/api/bff/auth/register", { method: "POST", origin: webOrigin, body: JSON.stringify({ username: "alice", email: "alice@example.com", password: "password" }) }), ["register"]);
 
 		expect(response.status).toBe(201);
-		expect(await response.json()).toEqual({ user: authentication.user, expires_at: authentication.expires_at });
-		expect(response.headers.get("set-cookie")).toContain("HttpOnly");
+		expect(await response.json()).toEqual(user);
+		expect(response.headers.get("set-cookie")).toBeNull();
 	});
 
 	it("rejects cross-origin mutations before calling Gateway", async () => {

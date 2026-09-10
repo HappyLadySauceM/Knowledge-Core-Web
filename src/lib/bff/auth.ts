@@ -59,11 +59,10 @@ async function handleRegister(request: NextRequest) {
 	if (!result.response) return invalidGatewayResponse();
 	if (!result.response.ok) return copyGatewayResponse(result.response);
 	const data = await result.response.json().catch(() => null);
-	const authentication = authenticationFromGateway(data);
-	if (!authentication) return invalidGatewayResponse();
-	const response = NextResponse.json(sessionAuthentication(authentication), { status: 201 });
-	applySessionCookies(response, authentication);
-	return response;
+	// Gateway Register returns UserData without tokens; the client continues to verify-email.
+	// Gateway 注册成功体是 UserData，不含 token；前端继续跳转邮箱验证。
+	if (!isRecord(data)) return invalidGatewayResponse();
+	return NextResponse.json(data, { status: 201 });
 }
 
 async function handleSession(request: NextRequest) {
