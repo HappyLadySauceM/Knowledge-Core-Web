@@ -11,9 +11,9 @@
 
 来源： `detected:project-scripts`, `package.json`, `user-confirmed`, `user-confirmed-development-commands`
 
-没有 `.github/workflows/ci.yml` / `web-pull-request`。推送到 `dev` 会运行 `.github/workflows/pipeline.yml`，配置来自 `.ci/pipeline.yaml`，在 ARC 上执行：`verify`/`deploy`/`smoke`/`release` 使用 `hls-standard`（非特权容器，request 2 CPU / 1Gi，limit 4 CPU / 4Gi，min 1 max 8；namespace 配额 32 CPU / 32Gi，pods 12）；`package` 使用 `hls-builder`（特权 Docker-in-Docker 4 CPU / 4Gi 加 runner 4 CPU / 1Gi，min 0 max 8；CPU/内存 ResourceQuota 仍为 64 CPU / 40Gi，pods 10）。工作流 `max-parallel` 为 8。`web-verify-build` 运行 lint、typecheck、test、build、Playwright e2e 和 Storybook。standard namespace 的 Pod Security 为 privileged，只为让 runner 共用 hostPath `/var/lib/hls-ci-cache` 挂到 `/cache`；不使用 GitHub Actions cache。外部 HTTP(S) 经 `HTTP_PROXY`/`HTTPS_PROXY`=`http://10.42.0.1:10991`（`arc-proxy` Secret）；`NO_PROXY` 覆盖 localhost、回环、`.svc`、Kubernetes API、Harbor、Argo 与 `.happyladysauce.local`。仍设置 `NODE_USE_ENV_PROXY=1`，以便 Node 24 的 action（含 `create-github-app-token` 的 post）走该代理。Node/pnpm/Playwright 下载走 npmmirror（`cdn.npmmirror.com` / `registry.npmmirror.com`），并且不恢复 GitHub Actions 的包缓存。Playwright 在 CI 中的 `webServer.timeout` 为 180s，并设置 `PORT=3000` 与 `HOSTNAME=0.0.0.0`。`prewarm-base-images` 只依赖 `plan`，因此与 `web-verify-build` 并行。`deploy-release` 的 checkout 使用 `fetch-depth: 0`，以便 `origin/main` 祖先检查成功。Knowledge-Core-Web/deploy 是可编辑的部署源，CI 使用 `knowledge-core-web-release` ServiceAccount 与集群内 `https://kubernetes.default.svc:443`，自动将其同步到 HappyLadySauceM/deploy/Knowledge-Core-Web；仅修改部署时跳过镜像构建，但仍校验 overlay、更新 GitOps、等待 Argo、运行冒烟并提升 main。Harbor 按提交 SHA 打候选 tag，Smoke 通过后提升 `:dev` 并更新 `:previous`。失败支持回滚，且禁止强制推送。`release` environment 仅限 `dev`，并提供 GH App 凭证、kubeconfig 与 `DEEPSEEK_API_KEY`。`pipeline.yml` 末尾有一个 `if: always()` 的 `notify` job，跑在 `hls-standard` 上，发送 CI 飞书卡。独立的 `.github/workflows/feishu-notify.yml` 只推 `pull_request`、`pull_request_review`、`issues`、`issue_comment` 和 `release`（没有 `workflow_run` 或 `push`），通过 HappyLadySauceM/ci-templates 的 `.github/actions/feishu-notify`，用组织 secrets `FEISHU_WEBHOOK_URL` 与 `FEISHU_WEBHOOK_SECRET`；它不使用 `release` environment，通知失败也不会让 `knowledge-core-web-pipeline` 变红。
+没有 `.github/workflows/ci.yml` / `web-pull-request`。推送到 `dev` 会运行 `.github/workflows/pipeline.yml`，配置来自 `.ci/pipeline.yaml`，在 ARC 上执行：`verify`/`deploy`/`smoke`/`release` 使用 `hls-standard`（非特权容器，request 2 CPU / 1Gi，limit 4 CPU / 4Gi，min 1 max 8；namespace 配额 32 CPU / 32Gi，pods 12）；`package` 使用 `hls-builder`（特权 Docker-in-Docker 4 CPU / 4Gi 加 runner 4 CPU / 1Gi，min 0 max 8；CPU/内存 ResourceQuota 仍为 64 CPU / 40Gi，pods 10）。工作流 `max-parallel` 为 8。`web-verify-build` 运行 lint、typecheck、test、build、Playwright e2e 和 Storybook。standard namespace 的 Pod Security 为 privileged，只为让 runner 共用 hostPath `/var/lib/hls-ci-cache` 挂到 `/cache`；不使用 GitHub Actions cache。外部 HTTP(S) 经 `HTTP_PROXY`/`HTTPS_PROXY`=`http://10.42.0.1:10991`（`arc-proxy` Secret）；`NO_PROXY` 覆盖 localhost、回环、`.svc`、Kubernetes API、Harbor、Argo 与 `.happyladysauce.local`。仍设置 `NODE_USE_ENV_PROXY=1`，以便 Node 24 的 action（含 `create-github-app-token` 的 post）走该代理。Node/pnpm/Playwright 下载走 npmmirror（`cdn.npmmirror.com` / `registry.npmmirror.com`），并且不恢复 GitHub Actions 的包缓存。Playwright 在 CI 中的 `webServer.timeout` 为 180s，并设置 `PORT=3000` 与 `HOSTNAME=0.0.0.0`。`prewarm-base-images` 只依赖 `plan`，因此与 `web-verify-build` 并行。`deploy-release` 的 checkout 使用 `fetch-depth: 0`，以便 `origin/main` 祖先检查成功。Knowledge-Core-Web/deploy 是可编辑的部署源，CI 使用 `knowledge-core-web-release` ServiceAccount 与集群内 `https://kubernetes.default.svc:443`，自动将其同步到 HappyLadySauceM/deploy/Knowledge-Core-Web；仅修改部署时跳过镜像构建，但仍校验 overlay、更新 GitOps、等待 Argo、运行冒烟并提升 main。Harbor 按提交 SHA 打候选 tag，Smoke 通过后提升 `:dev` 并更新 `:previous`。`cleanup-candidates` 仅在提升为 active tag 之后运行；Argo、smoke 或 promotion 失败时保留 SHA 候选，以便 `rerun --failed` 复用。当 GitHub run attempt 已过期或 run 查询失败时，`cleanup-candidate` 会跳过删除。失败支持回滚，且禁止强制推送。`release` environment 仅限 `dev`，并提供 GH App 凭证、kubeconfig 与 `DEEPSEEK_API_KEY`。`pipeline.yml` 末尾有一个 `if: always()` 的 `notify` job，跑在 `hls-standard` 上，发送 CI 飞书卡。独立的 `.github/workflows/feishu-notify.yml` 只推 `pull_request`、`pull_request_review`、`issues`、`issue_comment` 和 `release`（没有 `workflow_run` 或 `push`），通过 HappyLadySauceM/ci-templates 的 `.github/actions/feishu-notify`，用组织 secrets `FEISHU_WEBHOOK_URL` 与 `FEISHU_WEBHOOK_SECRET`；它不使用 `release` environment，通知失败也不会让 `knowledge-core-web-pipeline` 变红。
 
-<!-- fact:cicd.pipeline status:verified sources:.github/workflows/ci.yml, .github/workflows/pipeline.yml, user-confirmed, user-confirmed-4x8-hostpath-ubuntu-runtime, user-confirmed-builder-12-12-plus-12-2, user-confirmed-cicd-ratio-and-source-deploy-sync, user-confirmed-feishu-notify, user-confirmed-runner-migration -->
+<!-- fact:cicd.pipeline status:verified sources:.github/workflows/ci.yml, .github/workflows/pipeline.yml, user-confirmed, user-confirmed-4x8-hostpath-ubuntu-runtime, user-confirmed-arc-8x8-feishu-fold, user-confirmed-builder-12-12-plus-12-2, user-confirmed-candidate-cleanup-rerun-race, user-confirmed-cicd-ratio-and-source-deploy-sync, user-confirmed-feishu-notify, user-confirmed-runner-migration -->
 
 Lint、类型检查、单元测试、生产构建、e2e、Storybook、Docker 构建、Kustomize 渲染与 server dry-run、Argo 同步以及部署冒烟检查都必须通过。
 
@@ -28,7 +28,7 @@ Lint、类型检查、单元测试、生产构建、e2e、Storybook、Docker 构
 - **npm:build**: `{"command":"next build","source":"package.json"}`
 - **npm:build-storybook**: `{"command":"storybook build","source":"package.json"}`
 
-来源： `detected:project-scripts`, `package.json`
+来源： `detected:project-scripts`, `package.json`, `user-confirmed`
 
 ## `workflows.test`
 
@@ -37,7 +37,7 @@ Lint、类型检查、单元测试、生产构建、e2e、Storybook、Docker 构
 - **npm:test**: `{"command":"vitest run","source":"package.json"}`
 - **npm:test:watch**: `{"command":"vitest","source":"package.json"}`
 
-来源： `detected:project-scripts`, `package.json`
+来源： `detected:project-scripts`, `package.json`, `user-confirmed`
 
 ## `workflows.quality`
 
@@ -46,13 +46,13 @@ Lint、类型检查、单元测试、生产构建、e2e、Storybook、Docker 构
 - **npm:lint**: `{"command":"eslint .","source":"package.json"}`
 - **npm:typecheck**: `{"command":"tsc --noEmit","source":"package.json"}`
 
-来源： `detected:project-scripts`, `package.json`
+来源： `detected:project-scripts`, `package.json`, `user-confirmed`
 
 ## `cicd.config-files`
 
 状态：`verified`
 
 - `.github/workflows/feishu-notify.yml`
-- `.github/workflows/pipeline.yml
+- `.github/workflows/pipeline.yml`
 
 来源： `filesystem:ci-config`

@@ -455,7 +455,7 @@ jobs:
 
   cleanup-candidates:
     needs: [plan, deploy-release]
-    if: always() && needs.plan.outputs.has_build_changes == 'true' && (needs.deploy-release.outputs.smoke_ok != 'true' || needs.deploy-release.outputs.candidates_promoted == 'true')
+    if: always() && needs.plan.outputs.has_build_changes == 'true' && needs.deploy-release.outputs.candidates_promoted == 'true'
     runs-on: hls-standard
     timeout-minutes: 10
     environment: release
