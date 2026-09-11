@@ -16,7 +16,7 @@
 - Identity：注册、邮箱验证、密码重置、刷新会话、全端登出、账号停用
 - Knowledge：文档 CRUD、个人文件夹、标签、公开/私有、软删除和版本
 - Tiptap 文档画布与 Collaboration：Yjs 文档会话、在线状态入口
-- 公开文章页、slug、SEO metadata、canonical URL、locale RSS
+- 公开文章页、slug、locale RSS
 - Studio 文档列表、文件夹、回收站、成员与版本入口
 
 仍未完成：
@@ -24,6 +24,7 @@
 - slash commands 与浮动工具栏
 - 作者主页
 - 归档
+- 文章页 SEO metadata 与 canonical URL
 - 编辑器与 Studio 的其余 UX 打磨
 
 ## Stage 2：Media（代码已接入，UX 未完成）
