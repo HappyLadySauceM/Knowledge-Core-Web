@@ -18,6 +18,14 @@ test("renders the editorial homepage with a full-screen hero", async ({ page }) 
   await expect(page.locator("#articles")).toContainText("Pages worth reading");
 });
 
+test("renders Chinese login labels, html lang, and a forgot-password link", async ({ page }) => {
+  await page.goto("/zh-CN/login");
+  await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN");
+  await expect(page.getByLabel("邮箱或用户名")).toBeVisible();
+  await expect(page.getByLabel("密码")).toBeVisible();
+  await expect(page.getByRole("link", { name: "忘记密码？" })).toHaveAttribute("href", "/zh-CN/forgot-password");
+});
+
 test("protects the studio shell when no session cookie exists", async ({ page }) => {
   await page.goto("/zh-CN/studio");
   await expect(page).toHaveURL(/\/zh-CN\/login\?next=%2Fzh-CN%2Fstudio/);
@@ -45,8 +53,8 @@ test("hides the verification token and auto-submits the magic link", async ({ pa
   await page.goto("/zh-CN/verify-email?token=ka1.test-token");
   await expect(page.locator('input[name="token"]:not([type="hidden"])')).toHaveCount(0);
   await expect(page.getByLabel("Token")).toHaveCount(0);
-  await expect(page.locator(".form-error")).toContainText("This verification link is invalid");
-  await expect(page.getByLabel("Email")).toBeVisible();
+  await expect(page.locator(".form-error")).toContainText("验证链接无效");
+  await expect(page.getByLabel("邮箱")).toBeVisible();
 });
 
 test("hides the reset token and keeps the new password field", async ({ page }) => {
@@ -54,7 +62,7 @@ test("hides the reset token and keeps the new password field", async ({ page }) 
   await expect(page.locator('input[name="token"]')).toHaveAttribute("type", "hidden");
   await expect(page.locator('input[name="token"]')).toHaveValue("ka1.reset-token");
   await expect(page.getByLabel("Token")).toHaveCount(0);
-  await expect(page.getByLabel("New password")).toBeVisible();
+  await expect(page.getByLabel("新密码")).toBeVisible();
 });
 
 test("offers verification after a register email conflict", async ({ page }) => {
@@ -72,13 +80,13 @@ test("offers verification after a register email conflict", async ({ page }) => 
     });
   });
   await page.goto("/zh-CN/register");
-  await page.getByLabel("Username").fill("alice");
-  await page.getByLabel("Email").fill("alice@example.com");
-  await page.getByLabel("Password").fill("password1");
-  await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page.locator(".form-error")).toContainText("This email is already registered");
-  await expect(page.getByRole("link", { name: "Sign in" })).toHaveAttribute("href", "/zh-CN/login");
-  await expect(page.getByRole("link", { name: "Request a new verification link" })).toHaveAttribute(
+  await page.getByLabel("用户名").fill("alice");
+  await page.getByLabel("邮箱").fill("alice@example.com");
+  await page.getByLabel("密码").fill("password1");
+  await page.getByRole("button", { name: "创建账号" }).click();
+  await expect(page.locator(".form-error")).toContainText("该邮箱已注册");
+  await expect(page.getByRole("link", { name: "登录" })).toHaveAttribute("href", "/zh-CN/login");
+  await expect(page.getByRole("link", { name: "重新发送验证邮件" })).toHaveAttribute(
     "href",
     "/zh-CN/verify-email?email=alice%40example.com",
   );

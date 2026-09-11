@@ -1,5 +1,11 @@
 # 执行记录
 
+## 2026-09-11：文档与当前代码对齐
+
+`docs/README.md` 与 `docs/roadmap.md` 已按 `src/app/[locale]/` 实际路由和 Gateway 接入情况更新：业务 API 已接线，Stage 1 文档/发布与 Stage 2 媒体管理界面已存在，UX 仍未完成。历史条目中 2026-08-20「业务 API 尚未接入 / 尚未接入」描述的是当时骨架，不代表当前代码。
+
+仍未实现：slash commands、作者页、归档、社区、AI 对话 UI。
+
 ## 2026-09-09：Gateway API 产品闭环
 
 ### 已完成

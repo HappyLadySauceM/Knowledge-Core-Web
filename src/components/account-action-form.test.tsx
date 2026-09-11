@@ -38,7 +38,7 @@ describe("AccountActionForm", () => {
         expect.objectContaining({ method: "POST" }),
       );
     });
-    expect(await screen.findByRole("alert")).toHaveTextContent("This verification link is invalid");
+    expect(await screen.findByRole("alert")).toHaveTextContent("验证链接无效");
   });
 
   it("does not render a blank token field without a verification token", () => {

@@ -12,17 +12,20 @@ import {
   problemKeyFromBody,
   verifyEmailHref,
 } from "@/lib/account-action-messages";
+import { getMessages } from "@/lib/i18n";
 
 type AuthMode = "login" | "register";
 
 export function AuthForm({ locale, mode, next }: { locale: string; mode: AuthMode; next?: string }) {
   const router = useRouter();
+  const t = getMessages(locale);
   const [error, setError] = useState("");
   const [problemKind, setProblemKind] = useState<AuthProblemKind | "">("");
   const [submittedEmail, setSubmittedEmail] = useState("");
   const [pending, setPending] = useState(false);
   const isRegister = mode === "register";
   const recoveryHref = verifyEmailHref(locale, submittedEmail);
+  const copy = isRegister ? t.register : t.login;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -42,7 +45,7 @@ export function AuthForm({ locale, mode, next }: { locale: string; mode: AuthMod
     const data: unknown = await response.json().catch(() => ({}));
     setPending(false);
     if (!response.ok) {
-      const mapped = messageForAuthProblem(mode, problemKeyFromBody(data), problemFallbackFromBody(data));
+      const mapped = messageForAuthProblem(mode, problemKeyFromBody(data), problemFallbackFromBody(data), locale);
       setProblemKind(mapped.kind);
       setError(mapped.text);
       setSubmittedEmail(email);
@@ -59,38 +62,34 @@ export function AuthForm({ locale, mode, next }: { locale: string; mode: AuthMod
   return (
     <div className="auth-shell container-shell">
       <Link className="back-link" href={`/${locale}`}>
-        <ArrowLeft size={15} /> Back
+        <ArrowLeft size={15} /> {t.common.back}
       </Link>
       <div className="auth-card">
         <div className="auth-icon">{isRegister ? <UserPlus size={20} /> : <KeyRound size={20} />}</div>
-        <p className="eyebrow">{isRegister ? "Create your workspace" : "Welcome back"}</p>
-        <h1>{isRegister ? "Start your core." : "Sign in to your core."}</h1>
-        <p>
-          {isRegister
-            ? "A focused space for writing, learning, and sharing."
-            : "Your workspace is waiting exactly where you left it."}
-        </p>
+        <p className="eyebrow">{copy.eyebrow}</p>
+        <h1>{copy.title}</h1>
+        <p>{copy.body}</p>
         <form className="auth-form" onSubmit={submit}>
           {isRegister && (
             <label>
-              Username
+              {t.auth.username}
               <input name="username" required minLength={3} maxLength={32} autoComplete="username" />
             </label>
           )}
           {isRegister && (
             <label>
-              Email
+              {t.auth.email}
               <input name="email" type="email" required autoComplete="email" />
             </label>
           )}
           {!isRegister && (
             <label>
-              Email or username
+              {t.auth.identifier}
               <input name="identifier" required autoComplete="username" />
             </label>
           )}
           <label>
-            Password
+            {t.auth.password}
             <input
               name="password"
               type="password"
@@ -102,30 +101,31 @@ export function AuthForm({ locale, mode, next }: { locale: string; mode: AuthMod
           {error ? <p className="form-error" role="alert">{error}</p> : null}
           {problemKind === "email_conflict" ? (
             <p className="auth-footnote">
-              <Link href={`/${locale}/login`}>Sign in</Link>
+              <Link href={`/${locale}/login`}>{t.auth.signIn}</Link>
               {" · "}
-              <Link href={recoveryHref}>Request a new verification link</Link>
+              <Link href={recoveryHref}>{t.auth.requestVerification}</Link>
             </p>
           ) : null}
           {problemKind === "email_not_verified" ? (
             <p className="auth-footnote">
-              <Link href={recoveryHref}>Request a new verification link</Link>
+              <Link href={recoveryHref}>{t.auth.requestVerification}</Link>
             </p>
           ) : null}
           <Button type="submit" size="lg" disabled={pending}>
-            {pending ? "Working…" : isRegister ? "Create account" : "Continue"}
+            {pending ? t.common.working : isRegister ? t.auth.createAccount : t.login.submit}
           </Button>
         </form>
         <p className="auth-footnote">
           {isRegister ? (
             <>
-              Verify your email before signing in.{" "}
-              <Link href={`/${locale}/verify-email`}>Need a new link?</Link>
+              {t.auth.verifyHint}{" "}
+              <Link href={`/${locale}/verify-email`}>{t.auth.needLink}</Link>
             </>
           ) : (
             <>
-              <Link href={`/${locale}/register`}>Need an account? Create one.</Link>{" "}
-              <Link href={`/${locale}/verify-email`}>Need to verify your email?</Link>
+              <Link href={`/${locale}/register`}>{t.auth.needAccount}</Link>{" "}
+              <Link href={`/${locale}/forgot-password`}>{t.auth.forgotPassword}</Link>{" "}
+              <Link href={`/${locale}/verify-email`}>{t.auth.needVerify}</Link>
             </>
           )}
         </p>
