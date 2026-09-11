@@ -1,30 +1,38 @@
+import { getMessages } from "@/lib/i18n";
+
 export type AccountAction = "verify-email" | "request-verification" | "request-password-reset" | "reset-password";
 
 export type AccountProblemKind = "expired" | "used" | "invalid" | "generic";
 
 // Map Gateway problem keys to page copy without echoing the raw token.
 // 用 Gateway problem key 换成页面文案，不回显原始 token。
-export function messageForAccountProblem(action: AccountAction, key: string | undefined, fallback: string): { kind: AccountProblemKind; text: string } {
+export function messageForAccountProblem(
+  action: AccountAction,
+  key: string | undefined,
+  fallback: string,
+  locale = "en",
+): { kind: AccountProblemKind; text: string } {
+  const t = getMessages(locale);
   if (action === "verify-email") {
     if (key === "identity.action_expired") {
-      return { kind: "expired", text: "This verification link has expired. Enter your email to request a new one." };
+      return { kind: "expired", text: t.auth.verifyExpired };
     }
     if (key === "identity.action_already_used") {
-      return { kind: "used", text: "This email is already verified. You can sign in." };
+      return { kind: "used", text: t.auth.verifyUsed };
     }
     if (key === "identity.invalid_input") {
-      return { kind: "invalid", text: "This verification link is invalid. Enter your email to request a new one." };
+      return { kind: "invalid", text: t.auth.verifyInvalid };
     }
   }
   if (action === "reset-password") {
     if (key === "identity.action_expired") {
-      return { kind: "expired", text: "This reset link has expired. Request a new password reset email." };
+      return { kind: "expired", text: t.auth.resetExpired };
     }
     if (key === "identity.action_already_used") {
-      return { kind: "used", text: "This reset link has already been used. Sign in or request a new reset email." };
+      return { kind: "used", text: t.auth.resetUsed };
     }
     if (key === "identity.invalid_input") {
-      return { kind: "invalid", text: "This reset link is invalid. Request a new password reset email." };
+      return { kind: "invalid", text: t.auth.resetInvalid };
     }
   }
   return { kind: "generic", text: fallback };
@@ -59,21 +67,21 @@ export type AuthProblemKind = "email_conflict" | "username_conflict" | "email_no
 
 // Map register/login problem keys to recovery copy without leaking extra account state.
 // 把注册/登录 problem key 换成可恢复文案，不额外泄露账号状态。
-export function messageForAuthProblem(mode: AuthMode, key: string | undefined, fallback: string): { kind: AuthProblemKind; text: string } {
+export function messageForAuthProblem(
+  mode: AuthMode,
+  key: string | undefined,
+  fallback: string,
+  locale = "en",
+): { kind: AuthProblemKind; text: string } {
+  const t = getMessages(locale);
   if (mode === "register" && key === "identity.email_conflict") {
-    return {
-      kind: "email_conflict",
-      text: "This email is already registered. Sign in, or request a new verification link if you have not verified yet.",
-    };
+    return { kind: "email_conflict", text: t.auth.emailConflict };
   }
   if (mode === "register" && key === "identity.username_conflict") {
-    return { kind: "username_conflict", text: "This username is already taken. Choose another username." };
+    return { kind: "username_conflict", text: t.auth.usernameConflict };
   }
   if (mode === "login" && key === "identity.email_not_verified") {
-    return {
-      kind: "email_not_verified",
-      text: "Verify your email before signing in. Open the link from your inbox, or request a new one.",
-    };
+    return { kind: "email_not_verified", text: t.auth.emailNotVerified };
   }
   return { kind: "generic", text: fallback };
 }

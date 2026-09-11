@@ -24,10 +24,18 @@ export default async function LocaleLayout({
   if (!isLocale(locale)) notFound();
   const profile = await getSiteProfile();
 
+  // Locale layout owns <html lang> so SSR matches /zh-CN vs /en.
+  // 由 locale layout 设置 <html lang>，让服务端渲染与 /zh-CN、/en 一致。
   return (
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-      <AppProviders><SiteHeader locale={locale} profile={profile} />
-      <main>{children}</main></AppProviders>
-    </ThemeProvider>
+    <html lang={locale} suppressHydrationWarning>
+      <body>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+          <AppProviders>
+            <SiteHeader locale={locale} profile={profile} />
+            <main>{children}</main>
+          </AppProviders>
+        </ThemeProvider>
+      </body>
+    </html>
   );
 }

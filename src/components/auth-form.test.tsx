@@ -19,6 +19,14 @@ describe("AuthForm", () => {
     vi.unstubAllGlobals();
   });
 
+  it("renders Chinese labels and a forgot-password link on zh-CN login", () => {
+    render(<AuthForm locale="zh-CN" mode="login" />);
+    expect(screen.getByLabelText("邮箱或用户名")).toBeVisible();
+    expect(screen.getByLabelText("密码")).toBeVisible();
+    expect(screen.getByRole("button", { name: "继续" })).toBeVisible();
+    expect(screen.getByRole("link", { name: "忘记密码？" })).toHaveAttribute("href", "/zh-CN/forgot-password");
+  });
+
   it("links a register email conflict to sign-in and verification", async () => {
     fetchMock.mockResolvedValue(
       new Response(JSON.stringify({ key: "identity.email_conflict", detail: "email already exists" }), {
@@ -27,14 +35,14 @@ describe("AuthForm", () => {
       }),
     );
     render(<AuthForm locale="zh-CN" mode="register" />);
-    fireEvent.change(screen.getByLabelText("Username"), { target: { value: "alice" } });
-    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "alice@example.com" } });
-    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "password1" } });
-    fireEvent.submit(screen.getByRole("button", { name: "Create account" }).closest("form")!);
+    fireEvent.change(screen.getByLabelText("用户名"), { target: { value: "alice" } });
+    fireEvent.change(screen.getByLabelText("邮箱"), { target: { value: "alice@example.com" } });
+    fireEvent.change(screen.getByLabelText("密码"), { target: { value: "password1" } });
+    fireEvent.submit(screen.getByRole("button", { name: "创建账号" }).closest("form")!);
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("This email is already registered");
-    expect(screen.getByRole("link", { name: "Sign in" })).toHaveAttribute("href", "/zh-CN/login");
-    expect(screen.getByRole("link", { name: "Request a new verification link" })).toHaveAttribute(
+    expect(await screen.findByRole("alert")).toHaveTextContent("该邮箱已注册");
+    expect(screen.getByRole("link", { name: "登录" })).toHaveAttribute("href", "/zh-CN/login");
+    expect(screen.getByRole("link", { name: "重新发送验证邮件" })).toHaveAttribute(
       "href",
       "/zh-CN/verify-email?email=alice%40example.com",
     );
