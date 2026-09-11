@@ -11,7 +11,7 @@
 
 ## 当前状态
 
-2026-09-11，Web 已通过同源 BFF 接入 Gateway 认证与业务 API，不再停留在 Stage 0 骨架。Stage 1 文档工作区（列表、文件夹、编辑/协作入口、回收站、公开发布文章与 locale RSS）以及 Stage 2 媒体库管理界面已在代码中落地；UX 打磨仍不完整（编辑器 slash/浮动工具栏、部分管理流、空状态与文案一致性等）。
+2026-09-11，Web 已通过同源 BFF 接入 Gateway 认证与业务 API，不再停留在 Stage 0 骨架。Stage 1 文档工作区（列表、文件夹、编辑/协作入口、回收站、公开发布文章与 locale RSS）以及 Stage 2 媒体库管理界面已在代码中落地。文档编辑器已支持 slash 插入块与选区浮动格式栏；其余 UX 打磨仍不完整（部分管理流、空状态与文案一致性等）。
 
 已实现的 locale 路由（`src/app/[locale]/`）：
 
@@ -27,4 +27,4 @@
 - `/{locale}/login`、`/{locale}/register`、`/{locale}/verify-email`、`/{locale}/forgot-password`、`/{locale}/reset-password`
 - `/{locale}/settings/security`
 
-尚未实现：slash commands、作者页、归档、社区、AI 对话 UI。
+尚未实现：作者页、归档、社区、AI 对话 UI。

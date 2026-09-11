@@ -15,13 +15,12 @@
 
 - Identity：注册、邮箱验证、密码重置、刷新会话、全端登出、账号停用
 - Knowledge：文档 CRUD、个人文件夹、标签、公开/私有、软删除和版本
-- Tiptap 文档画布与 Collaboration：Yjs 文档会话、在线状态入口
+- Tiptap 文档画布与 Collaboration：Yjs 文档会话、在线状态入口、slash 插入块、选区浮动格式栏
 - 公开文章页、slug、locale RSS
 - Studio 文档列表、文件夹、回收站、成员与版本入口
 
 仍未完成：
 
-- slash commands 与浮动工具栏
 - 作者主页
 - 归档
 - 文章页 SEO metadata 与 canonical URL
