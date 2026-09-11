@@ -85,7 +85,7 @@ test("offers verification after a register email conflict", async ({ page }) => 
   await page.getByLabel("密码").fill("password1");
   await page.getByRole("button", { name: "创建账号" }).click();
   await expect(page.locator(".form-error")).toContainText("该邮箱已注册");
-  await expect(page.getByRole("link", { name: "登录" })).toHaveAttribute("href", "/zh-CN/login");
+  await expect(page.getByRole("main").getByRole("link", { name: "登录" })).toHaveAttribute("href", "/zh-CN/login");
   await expect(page.getByRole("link", { name: "重新发送验证邮件" })).toHaveAttribute(
     "href",
     "/zh-CN/verify-email?email=alice%40example.com",
