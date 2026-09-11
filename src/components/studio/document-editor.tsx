@@ -15,10 +15,12 @@ import CollaborationCaret from "@tiptap/extension-collaboration-caret";
 import { IndexeddbPersistence } from "y-indexeddb";
 import * as Y from "yjs";
 import { Bold, History, Italic, List, Redo2, Settings, Strikethrough, Trash2, Underline as UnderlineIcon, Undo2, Users } from "lucide-react";
+import { AppDialog } from "@/components/ui/dialog";
 import { documentsApi } from "@/lib/api/documents";
 import { foldersApi } from "@/lib/api/folders";
 import { membersApi, versionsApi } from "@/lib/api/collaboration";
 import { KnowledgeWebSocketProvider, type CollaborationStatus } from "@/lib/collaboration/provider";
+import { getMessages } from "@/lib/i18n";
 
 function base64url(value: Uint8Array) {
   let binary = "";
@@ -42,6 +44,7 @@ export function DocumentEditor({ documentId, locale }: { documentId: string; loc
 
 function DocumentEditorSession({ documentId, locale }: { documentId: string; locale: string }) {
   const router = useRouter(); const queryClient = useQueryClient();
+  const t = getMessages(locale);
   const [doc, setDoc] = useState<Y.Doc | null>(null);
   const [provider, setProvider] = useState<KnowledgeWebSocketProvider | null>(null);
   const [sessionEpoch, setSessionEpoch] = useState(0);
@@ -50,6 +53,15 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
   const [error, setError] = useState("");
   const [transaction, setTransaction] = useState(0);
   const [panel, setPanel] = useState<"settings" | "members" | "versions" | null>(null);
+  const [dialog, setDialog] = useState<
+    | { kind: "delete-document" }
+    | { kind: "add-member" }
+    | { kind: "remove-member"; userId: string; revision: number; name: string }
+    | { kind: "create-version" }
+    | { kind: "restore-version"; versionId: string; sequence: number }
+    | null
+  >(null);
+  const [dialogPending, setDialogPending] = useState(false);
   const documentQuery = useQuery({ queryKey: ["document", documentId], queryFn: () => documentsApi.get(documentId).then((value) => value.data), refetchInterval: (query) => ["publishing", "unpublishing"].includes(query.state.data?.publication_status ?? "") ? 2000 : false });
   const folders = useQuery({ queryKey: ["folders", "root"], queryFn: () => foldersApi.list().then((value) => value.data.items) });
   const members = useQuery({ queryKey: ["members", documentId], queryFn: () => membersApi.list(documentId).then((value) => value.data.items), enabled: panel === "members" });
@@ -125,17 +137,69 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
 
   async function unpublish() { if (!metadataRevision) return; setPublishing(true); setError(""); try { await documentsApi.unpublish(documentId, metadataRevision); await documentQuery.refetch(); } catch (reason) { setError(reason instanceof Error ? reason.message : "Unpublish failed"); } finally { setPublishing(false); } }
   async function saveMetadata(event: FormEvent<HTMLFormElement>) { event.preventDefault(); if (!documentQuery.data) return; const form = new FormData(event.currentTarget); try { const result = await documentsApi.update(documentId, documentQuery.data.metadata_revision, { title: String(form.get("title") ?? ""), summary: String(form.get("summary") ?? ""), slug: String(form.get("slug") ?? ""), language: String(form.get("language") ?? ""), tags: String(form.get("tags") ?? "").split(",").map((item) => item.trim()).filter(Boolean), folder_id: String(form.get("folder_id") ?? "") }); queryClient.setQueryData(["document", documentId], result.data); setError(""); } catch (reason) { setError(reason instanceof Error ? reason.message : "Update failed"); } }
-  async function deleteDocument() { if (!documentQuery.data || !confirm(`Delete “${documentQuery.data.title}”?`)) return; try { await documentsApi.remove(documentId, documentQuery.data.metadata_revision); router.push(`/${locale}/studio`); } catch (reason) { setError(reason instanceof Error ? reason.message : "Delete failed"); } }
-  async function addMember() { const username = prompt("Username"); if (!username?.trim()) return; try { await membersApi.add(documentId, username.trim(), "viewer"); await members.refetch(); } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to add member"); } }
   async function changeMember(userId: string, revision: number, role: "viewer" | "editor") { try { await membersApi.update(documentId, userId, revision, role); await members.refetch(); } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to update member"); } }
-  async function removeMember(userId: string, revision: number) { if (!confirm("Remove this member?")) return; try { await membersApi.remove(documentId, userId, revision); await members.refetch(); } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to remove member"); } }
-  async function createVersion() { const label = prompt("Version label (optional)") ?? undefined; try { await versionsApi.create(documentId, label); await versions.refetch(); } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to create version"); } }
-  async function restoreVersion(versionId: string, fallbackSequence: number) { try { const detail = await versionsApi.get(documentId, versionId); const preview = detail.data.plain_text.slice(0, 240) || "(empty document)"; if (!confirm(`Restore this version? Current collaborators will reconnect.\n\n${preview}`)) return; const expectedSequence = versions.data?.items[0]?.sequence ?? fallbackSequence; await versionsApi.restore(documentId, versionId, expectedSequence); window.location.reload(); } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to restore version"); } }
+
+  function closeDialog() {
+    setDialog(null);
+  }
+
+  // Confirm member/version/trash actions through AppDialog; cancel must not hit Gateway.
+  // 成员/版本/删除走 AppDialog 确认；取消时不得调用 Gateway。
+  async function confirmDialog(value: string) {
+    if (!dialog || dialogPending) return;
+    setDialogPending(true);
+    setError("");
+    try {
+      if (dialog.kind === "delete-document") {
+        if (!documentQuery.data) return;
+        await documentsApi.remove(documentId, documentQuery.data.metadata_revision);
+        router.push(`/${locale}/studio`);
+        return;
+      }
+      if (dialog.kind === "add-member") {
+        await membersApi.add(documentId, value, "viewer");
+        await members.refetch();
+      }
+      if (dialog.kind === "remove-member") {
+        await membersApi.remove(documentId, dialog.userId, dialog.revision);
+        await members.refetch();
+      }
+      if (dialog.kind === "create-version") {
+        await versionsApi.create(documentId, value || undefined);
+        await versions.refetch();
+      }
+      if (dialog.kind === "restore-version") {
+        const expectedSequence = versions.data?.items[0]?.sequence ?? dialog.sequence;
+        await versionsApi.restore(documentId, dialog.versionId, expectedSequence);
+        window.location.reload();
+        return;
+      }
+      setDialog(null);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Request failed");
+    } finally {
+      setDialogPending(false);
+    }
+  }
 
   const canEdit = documentQuery.data?.access === "owner" || documentQuery.data?.access === "editor";
   const publicationStatus = documentQuery.data?.publication_status;
   const publicationPending = publicationStatus === "publishing" || publicationStatus === "unpublishing";
   return <><header className="editor-page-heading"><div><p className="eyebrow">{documentQuery.data?.published ? "Published" : "Collaborative document"}</p><h1>{documentQuery.data?.title ?? "Loading…"}</h1><p className="document-editor-lede">{documentQuery.data?.summary || "Changes sync live and stay available while you reconnect."}</p></div><div className="editor-header-actions"><button onClick={() => setPanel(panel === "settings" ? null : "settings")}><Settings size={15} />Settings</button>{documentQuery.data?.access === "owner" && <button onClick={() => setPanel(panel === "members" ? null : "members")}><Users size={15} />Members</button>}<button onClick={() => setPanel(panel === "versions" ? null : "versions")}><History size={15} />Versions</button></div></header>
   <div className="editor-layout"><section className="document-editor-shell"><div className="document-editor-toolbar"><div className="format-tools"><button type="button" aria-label="Bold" onClick={() => editor?.chain().focus().toggleBold().run()}><Bold size={15} /></button><button type="button" aria-label="Italic" onClick={() => editor?.chain().focus().toggleItalic().run()}><Italic size={15} /></button><button type="button" aria-label="Underline" onClick={() => editor?.chain().focus().toggleUnderline().run()}><UnderlineIcon size={15} /></button><button type="button" aria-label="Strike" onClick={() => editor?.chain().focus().toggleStrike().run()}><Strikethrough size={15} /></button><button type="button" aria-label="List" onClick={() => editor?.chain().focus().toggleBulletList().run()}><List size={15} /></button><button type="button" aria-label="Undo" onClick={() => editor?.commands.undo()}><Undo2 size={15} /></button><button type="button" aria-label="Redo" onClick={() => editor?.commands.redo()}><Redo2 size={15} /></button></div><span className="editor-status">{publicationPending ? (publicationStatus === "publishing" ? "Publishing media…" : "Removing publication…") : canEdit ? status : "Read only"}</span>{status === "Offline" && provider && <button type="button" onClick={() => { setError(""); provider.retry(); }}>Retry</button>}{documentQuery.data?.published ? <button type="button" onClick={() => void unpublish()} disabled={publishing || publicationPending || !canEdit}>Unpublish</button> : <button type="button" onClick={() => void publish()} disabled={publishing || publicationPending || !editor || status === "Offline" || !canEdit}>{publishing || publicationStatus === "publishing" ? "Publishing…" : "Publish"}</button>}</div>{(error || documentQuery.data?.publication_error) && <p className="form-error">{error || documentQuery.data?.publication_error}</p>}<EditorContent editor={editor} /></section>
-  {panel && <aside className="editor-panel">{panel === "settings" && documentQuery.data && <form onSubmit={saveMetadata}><h2>Document settings</h2><label>Title<input name="title" defaultValue={documentQuery.data.title} required maxLength={200} /></label><label>Summary<textarea name="summary" defaultValue={documentQuery.data.summary} maxLength={1000} /></label><label>Slug<input name="slug" defaultValue={documentQuery.data.slug} /></label><label>Language<input name="language" defaultValue={documentQuery.data.language} /></label><label>Tags<input name="tags" defaultValue={documentQuery.data.tags?.join(", ")} /></label><label>Folder<select name="folder_id" defaultValue={documentQuery.data.folder_id}><option value="">No folder</option>{folders.data?.map((folder) => <option value={folder.id} key={folder.id}>{folder.name}</option>)}</select></label><button type="submit">Save metadata</button><button className="danger-button" type="button" onClick={() => void deleteDocument()}><Trash2 size={14} />Move to trash</button></form>}{panel === "members" && <div><h2>Members</h2><button type="button" onClick={() => void addMember()}>Add member</button>{members.data?.map((member) => <article className="panel-row" key={member.user.id}><div><strong>{member.user.username}</strong><span>{member.role}</span></div><select value={member.role} onChange={(event) => void changeMember(member.user.id, member.revision, event.target.value as "viewer" | "editor")}><option value="viewer">Viewer</option><option value="editor">Editor</option></select><button type="button" onClick={() => void removeMember(member.user.id, member.revision)}>Remove</button></article>)}</div>}{panel === "versions" && <div><h2>Version history</h2>{canEdit && <button type="button" onClick={() => void createVersion()}>Create version</button>}{versions.data?.items.map((version) => <article className="panel-row" key={version.id}><div><strong>{version.label || version.kind}</strong><span>#{version.sequence} · {new Date(version.created_at).toLocaleString(locale)}</span></div>{canEdit && <button type="button" onClick={() => void restoreVersion(version.id, version.sequence)}>Restore</button>}</article>)}</div>}</aside>}</div></>;
+  {panel && <aside className="editor-panel">{panel === "settings" && documentQuery.data && <form onSubmit={saveMetadata}><h2>{t.studio.documentSettings}</h2><label>Title<input name="title" defaultValue={documentQuery.data.title} required maxLength={200} /></label><label>Summary<textarea name="summary" defaultValue={documentQuery.data.summary} maxLength={1000} /></label><label>Slug<input name="slug" defaultValue={documentQuery.data.slug} /></label><label>Language<input name="language" defaultValue={documentQuery.data.language} /></label><label>Tags<input name="tags" defaultValue={documentQuery.data.tags?.join(", ")} /></label><label>Folder<select name="folder_id" defaultValue={documentQuery.data.folder_id}><option value="">No folder</option>{folders.data?.map((folder) => <option value={folder.id} key={folder.id}>{folder.name}</option>)}</select></label><button type="submit">Save metadata</button><button className="danger-button" type="button" onClick={() => setDialog({ kind: "delete-document" })}><Trash2 size={14} />{t.studio.deleteDocument}</button></form>}{panel === "members" && <div><h2>{t.studio.members}</h2><button type="button" onClick={() => setDialog({ kind: "add-member" })}>{t.studio.addMember}</button>{members.data?.map((member) => <article className="panel-row" key={member.user.id}><div><strong>{member.user.username}</strong><span>{member.role}</span></div><select value={member.role} onChange={(event) => void changeMember(member.user.id, member.revision, event.target.value as "viewer" | "editor")}><option value="viewer">Viewer</option><option value="editor">Editor</option></select><button type="button" onClick={() => setDialog({ kind: "remove-member", userId: member.user.id, revision: member.revision, name: member.user.username })}>{t.studio.removeMember}</button></article>)}</div>}{panel === "versions" && <div><h2>{t.studio.versionHistory}</h2>{canEdit && <button type="button" onClick={() => setDialog({ kind: "create-version" })}>{t.studio.createVersion}</button>}{versions.data?.items.map((version) => <article className="panel-row" key={version.id}><div><strong>{version.label || version.kind}</strong><span>#{version.sequence} · {new Date(version.created_at).toLocaleString(locale)}</span></div>{canEdit && <button type="button" onClick={() => setDialog({ kind: "restore-version", versionId: version.id, sequence: version.sequence })}>{t.studio.restore}</button>}</article>)}</div>}</aside>}</div>
+    <AppDialog
+      key={dialog?.kind === "remove-member" ? `remove-${dialog.userId}` : dialog?.kind === "restore-version" ? `restore-${dialog.versionId}` : dialog?.kind}
+      open={Boolean(dialog)}
+      title={dialog?.kind === "add-member" ? t.studio.addMember : dialog?.kind === "remove-member" ? t.studio.removeMember : dialog?.kind === "create-version" ? t.studio.createVersion : dialog?.kind === "restore-version" ? t.studio.restoreVersion : t.studio.deleteDocument}
+      description={dialog?.kind === "remove-member" ? t.studio.removeMemberBody.replace("{name}", dialog.name) : dialog?.kind === "restore-version" ? t.studio.restoreVersionBody : dialog?.kind === "delete-document" ? t.studio.deleteDocumentBody.replace("{name}", documentQuery.data?.title ?? "") : undefined}
+      inputLabel={dialog?.kind === "add-member" ? t.studio.memberUsername : dialog?.kind === "create-version" ? t.studio.versionLabel : undefined}
+      inputRequired={dialog?.kind === "add-member"}
+      confirmLabel={dialogPending ? t.common.working : dialog?.kind === "create-version" || dialog?.kind === "add-member" ? t.common.create : dialog?.kind === "restore-version" ? t.studio.restore : t.common.confirm}
+      cancelLabel={t.common.cancel}
+      pending={dialogPending}
+      onClose={closeDialog}
+      onConfirm={(value) => void confirmDialog(value)}
+    />
+  </>;
 }

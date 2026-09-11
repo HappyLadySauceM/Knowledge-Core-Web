@@ -11,8 +11,10 @@ type AppDialogProps = {
   description?: string;
   inputLabel?: string;
   inputDefault?: string;
+  inputRequired?: boolean;
   confirmLabel: string;
   cancelLabel: string;
+  pending?: boolean;
   onClose: () => void;
   onConfirm: (value: string) => void;
 };
@@ -23,13 +25,16 @@ export function AppDialog({
   description,
   inputLabel,
   inputDefault = "",
+  inputRequired = true,
   confirmLabel,
   cancelLabel,
+  pending = false,
   onClose,
   onConfirm,
 }: AppDialogProps) {
   const titleId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
+  const confirmRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -38,21 +43,26 @@ export function AppDialog({
     };
     window.addEventListener("keydown", onKey);
     const frame = window.requestAnimationFrame(() => {
-      inputRef.current?.focus();
-      inputRef.current?.select();
+      if (inputRef.current) {
+        inputRef.current.focus();
+        inputRef.current.select();
+        return;
+      }
+      confirmRef.current?.focus();
     });
     return () => {
       window.removeEventListener("keydown", onKey);
       window.cancelAnimationFrame(frame);
     };
-  }, [open, onClose]);
+  }, [open, onClose, pending]);
 
   if (!open) return null;
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (pending) return;
     const value = inputRef.current?.value ?? "";
-    if (inputLabel && !value.trim()) return;
+    if (inputLabel && inputRequired && !value.trim()) return;
     onConfirm(value.trim());
   }
 
@@ -71,14 +81,16 @@ export function AppDialog({
         {inputLabel ? (
           <label className="app-dialog-field">
             {inputLabel}
-            <input ref={inputRef} name="value" defaultValue={inputDefault} />
+            <input ref={inputRef} name="value" defaultValue={inputDefault} disabled={pending} />
           </label>
         ) : null}
         <div className="app-dialog-actions">
           <Button type="button" variant="outline" onClick={onClose}>
             {cancelLabel}
           </Button>
-          <Button type="submit">{confirmLabel}</Button>
+          <Button ref={confirmRef} type="submit" disabled={pending}>
+            {confirmLabel}
+          </Button>
         </div>
       </form>
     </div>

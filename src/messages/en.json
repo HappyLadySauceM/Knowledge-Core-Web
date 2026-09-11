@@ -89,7 +89,20 @@
     "trashMedia": "Move to trash",
     "trashMediaBody": "Move “{name}” to trash?",
     "restore": "Restore",
-    "download": "Download"
+    "download": "Download",
+    "addMember": "Add member",
+    "memberUsername": "Username",
+    "removeMember": "Remove member",
+    "removeMemberBody": "Remove {name} from this document?",
+    "createVersion": "Create version",
+    "versionLabel": "Version label (optional)",
+    "restoreVersion": "Restore version",
+    "restoreVersionBody": "Restore this version? Current collaborators will reconnect.",
+    "deleteDocument": "Move to trash",
+    "deleteDocumentBody": "Move “{name}” to trash?",
+    "members": "Members",
+    "versionHistory": "Version history",
+    "documentSettings": "Document settings"
   },
   "login": {
     "eyebrow": "Welcome back",

@@ -89,7 +89,20 @@
     "trashMedia": "移到回收站",
     "trashMediaBody": "将「{name}」移到回收站？",
     "restore": "恢复",
-    "download": "下载"
+    "download": "下载",
+    "addMember": "添加成员",
+    "memberUsername": "用户名",
+    "removeMember": "移除成员",
+    "removeMemberBody": "将 {name} 移出这篇文档？",
+    "createVersion": "创建版本",
+    "versionLabel": "版本标签（可选）",
+    "restoreVersion": "恢复此版本",
+    "restoreVersionBody": "恢复此版本？当前协作者会重新连接。",
+    "deleteDocument": "移到回收站",
+    "deleteDocumentBody": "将「{name}」移到回收站？",
+    "members": "成员",
+    "versionHistory": "版本历史",
+    "documentSettings": "文档设置"
   },
   "login": {
     "eyebrow": "欢迎回来",
