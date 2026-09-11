@@ -172,4 +172,13 @@ describe("web BFF session layer", () => {
 		expect(response.status).toBe(200);
 		expect(response.headers.get("set-cookie")).toContain("kc_access=;");
 	});
+
+	it("forwards verification status with the session cookie", async () => {
+		fetchMock.mockResolvedValueOnce(jsonResponse({ state: "pending", retry_after_seconds: 60, expires_at: "2026-09-11T04:00:00Z" }));
+		const response = await handleAuth(request("/api/bff/auth/request-verification", { origin: webOrigin, cookies: "kc_access=access-old" }), ["request-verification"]);
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual({ state: "pending", retry_after_seconds: 60, expires_at: "2026-09-11T04:00:00Z" });
+		expect(new Headers(fetchMock.mock.calls[0]?.[1]?.headers).get("authorization")).toBe("Bearer access-old");
+	});
 });

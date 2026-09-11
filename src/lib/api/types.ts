@@ -3,7 +3,7 @@ import { z } from "zod";
 export const ProblemDetailsSchema = z.object({ type: z.string().optional(), title: z.string(), status: z.number(), detail: z.string().optional(), instance: z.string().optional(), code: z.number().optional(), key: z.string().optional(), request_id: z.string().optional(), trace_id: z.string().optional() });
 export type ProblemDetails = z.infer<typeof ProblemDetailsSchema>;
 const PublicUserSchema = z.object({ id: z.string(), username: z.string(), avatar: z.string(), avatar_attachment_id: z.string().optional() });
-export const SessionUserSchema = PublicUserSchema.extend({ email: z.string(), role: z.string(), status: z.string(), bio: z.string(), created_at: z.string(), updated_at: z.string() });
+export const SessionUserSchema = PublicUserSchema.extend({ email: z.string(), role: z.string(), status: z.string(), bio: z.string(), created_at: z.string(), updated_at: z.string(), email_verified_at: z.string().optional() });
 export type SessionUser = z.infer<typeof SessionUserSchema>;
 export const SessionDataSchema = z.object({ user: SessionUserSchema.nullable(), expires_at: z.string().optional() });
 export type SessionData = z.infer<typeof SessionDataSchema>;

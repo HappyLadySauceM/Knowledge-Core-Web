@@ -44,7 +44,8 @@ describe("AccountActionForm", () => {
   it("does not render a blank token field without a verification token", () => {
     render(<AccountActionForm action="verify-email" locale="en" email="alice@example.com" />);
     expect(document.querySelector('input[name="token"]')).toBeNull();
-    expect(screen.getByLabelText("Email")).toHaveValue("alice@example.com");
+    expect(screen.queryByLabelText("Email")).toBeNull();
+    expect(screen.getByRole("link", { name: "Continue to sign in" })).toHaveAttribute("href", "/en/login");
   });
 
   it("hides the reset token and keeps the new password field", () => {

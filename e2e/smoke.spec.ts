@@ -28,36 +28,7 @@ test("keeps the requested locale when protecting authenticated pages", async ({ 
   await expect(page).toHaveURL(/\/en\/login\?next=%2Fen%2Fstudio%2Fmedia/);
 });
 
-test("hides the verification token and auto-submits the magic link", async ({ page }) => {
-  await page.route("**/api/bff/auth/verify-email", async (route) => {
-    await route.fulfill({
-      status: 400,
-      contentType: "application/problem+json",
-      body: JSON.stringify({
-        type: "urn:knowledge-core:problem:identity.invalid_input",
-        title: "invalid identity input",
-        status: 400,
-        key: "identity.invalid_input",
-        detail: "invalid identity input",
-      }),
-    });
-  });
-  await page.goto("/zh-CN/verify-email?token=ka1.test-token");
-  await expect(page.locator('input[name="token"]:not([type="hidden"])')).toHaveCount(0);
-  await expect(page.getByLabel("Token")).toHaveCount(0);
-  await expect(page.locator(".form-error")).toContainText("This verification link is invalid");
-  await expect(page.getByLabel("Email")).toBeVisible();
-});
-
-test("hides the reset token and keeps the new password field", async ({ page }) => {
-  await page.goto("/zh-CN/reset-password?token=ka1.reset-token");
-  await expect(page.locator('input[name="token"]')).toHaveAttribute("type", "hidden");
-  await expect(page.locator('input[name="token"]')).toHaveValue("ka1.reset-token");
-  await expect(page.getByLabel("Token")).toHaveCount(0);
-  await expect(page.getByLabel("New password")).toBeVisible();
-});
-
-test("offers verification after a register email conflict", async ({ page }) => {
+test("offers sign-in after a register email conflict", async ({ page }) => {
   await page.route("**/api/bff/auth/register", async (route) => {
     await route.fulfill({
       status: 409,
@@ -78,33 +49,112 @@ test("offers verification after a register email conflict", async ({ page }) => 
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page.locator(".form-error")).toContainText("This email is already registered");
   await expect(page.getByRole("link", { name: "Sign in" })).toHaveAttribute("href", "/zh-CN/login");
-  await expect(page.getByRole("link", { name: "Request a new verification link" })).toHaveAttribute(
-    "href",
-    "/zh-CN/verify-email?email=alice%40example.com",
-  );
+  await expect(page.getByRole("link", { name: "Request a new verification link" })).toHaveCount(0);
 });
 
-test("offers verification after an unverified login", async ({ page }) => {
-  await page.route("**/api/bff/auth/login", async (route) => {
+test("keeps the verification token hidden and guides invalid links to sign-in", async ({ page }) => {
+  await page.route("**/api/bff/auth/verify-email", async (route) => {
     await route.fulfill({
-      status: 403,
+      status: 400,
       contentType: "application/problem+json",
       body: JSON.stringify({
-        type: "urn:knowledge-core:problem:identity.email_not_verified",
-        title: "email verification is required",
-        status: 403,
-        key: "identity.email_not_verified",
-        detail: "email verification is required",
+        type: "urn:knowledge-core:problem:identity.invalid_input",
+        title: "invalid identity input",
+        status: 400,
+        key: "identity.invalid_input",
+        detail: "invalid identity input",
       }),
     });
   });
-  await page.goto("/en/login");
-  await page.getByLabel("Email or username").fill("alice@example.com");
-  await page.getByLabel("Password").fill("password1");
-  await page.getByRole("button", { name: "Continue" }).click();
-  await expect(page.locator(".form-error")).toContainText("Verify your email before signing in");
-  await expect(page.getByRole("link", { name: "Request a new verification link" })).toHaveAttribute(
-    "href",
-    "/en/verify-email?email=alice%40example.com",
-  );
+  await page.goto("/zh-CN/verify-email?token=ka1.test-token");
+  await expect(page.locator('input[name="token"]:not([type="hidden"])')).toHaveCount(0);
+  await expect(page.getByLabel("Token")).toHaveCount(0);
+  await expect(page.locator(".form-error")).toContainText("This verification link is invalid");
+  await expect(page.getByLabel("Email")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Continue to sign in" })).toHaveAttribute("href", "/zh-CN/login");
+});
+
+test("shows a Studio reminder only for unverified sessions", async ({ page }) => {
+  await page.context().addCookies([{ name: "kc_access", value: "test-access", url: "http://localhost:3000" }]);
+  await page.route("**/api/bff/auth/session", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        user: {
+          id: "1",
+          username: "alice",
+          avatar: "",
+          email: "alice@example.com",
+          role: "user",
+          status: "pending_verification",
+          bio: "",
+          created_at: "2026-01-01T00:00:00Z",
+          updated_at: "2026-01-01T00:00:00Z",
+        },
+      }),
+    });
+  });
+  await page.route("**/api/bff/auth/request-verification", async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ state: "idle" }),
+      });
+      return;
+    }
+    await route.continue();
+  });
+  await page.route("**/api/bff/gateway/**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ items: [], page: { has_more: false } }),
+    });
+  });
+  await page.goto("/zh-CN/studio");
+  await expect(page.locator(".verify-banner")).toContainText("请验证邮箱");
+  await expect(page.getByRole("button", { name: "发送验证邮件" })).toBeEnabled();
+});
+
+test("hides the Studio reminder after the email is verified", async ({ page }) => {
+  await page.context().addCookies([{ name: "kc_access", value: "test-access", url: "http://localhost:3000" }]);
+  await page.route("**/api/bff/auth/session", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        user: {
+          id: "1",
+          username: "alice",
+          avatar: "",
+          email: "alice@example.com",
+          role: "user",
+          status: "active",
+          bio: "",
+          created_at: "2026-01-01T00:00:00Z",
+          updated_at: "2026-01-01T00:00:00Z",
+          email_verified_at: "2026-01-01T01:00:00Z",
+        },
+      }),
+    });
+  });
+  await page.route("**/api/bff/gateway/**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ items: [], page: { has_more: false } }),
+    });
+  });
+  await page.goto("/zh-CN/studio");
+  await expect(page.locator(".verify-banner")).toHaveCount(0);
+});
+
+test("hides the reset token and keeps the new password field", async ({ page }) => {
+  await page.goto("/zh-CN/reset-password?token=ka1.reset-token");
+  await expect(page.locator('input[name="token"]')).toHaveAttribute("type", "hidden");
+  await expect(page.locator('input[name="token"]')).toHaveValue("ka1.reset-token");
+  await expect(page.getByLabel("Token")).toHaveCount(0);
+  await expect(page.getByLabel("New password")).toBeVisible();
 });

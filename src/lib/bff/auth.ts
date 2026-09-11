@@ -59,8 +59,8 @@ async function handleRegister(request: NextRequest) {
 	if (!result.response) return invalidGatewayResponse();
 	if (!result.response.ok) return copyGatewayResponse(result.response);
 	const data = await result.response.json().catch(() => null);
-	// Gateway Register returns UserData without tokens; the client continues to verify-email.
-	// Gateway 注册成功体是 UserData，不含 token；前端继续跳转邮箱验证。
+	// Gateway Register returns UserData without tokens; the client continues to sign in.
+	// Gateway 注册成功体是 UserData，不含 token；前端继续跳转登录。
 	if (!isRecord(data)) return invalidGatewayResponse();
 	return NextResponse.json(data, { status: 201 });
 }
@@ -136,9 +136,28 @@ async function handleRefresh(request: NextRequest) {
 }
 
 async function handleMapped(request: NextRequest, name: string, id?: string) {
+	if (name === "request-verification") {
+		if (request.method !== "GET" && request.method !== "POST") return problemResponse(405, "Method not allowed");
+		const body = request.method === "GET" ? undefined : ((await readBody(request)) ?? new ArrayBuffer(0));
+		const result = await requestGateway(request, ["api", "v1", "email-verification-requests"], {
+			method: request.method,
+			body,
+			session: readSession(request),
+			includeSession: true,
+			retryUnauthorized: true,
+		});
+		if (result.transportError) {
+			const response = transportErrorResponse(result.transportError);
+			if (result.rotated) applySessionCookies(response, result.rotated);
+			return response;
+		}
+		if (!result.response) return invalidGatewayResponse();
+		const response = await copyGatewayResponse(result.response);
+		applyResultCookies(response, result);
+		return response;
+	}
 	const routes: Record<string, { target: string[]; requestMethod: string; method: string; includeSession: boolean }> = {
 		"verify-email": { target: ["api", "v1", "email-verifications"], requestMethod: "POST", method: "POST", includeSession: false },
-		"request-verification": { target: ["api", "v1", "email-verification-requests"], requestMethod: "POST", method: "POST", includeSession: false },
 		"request-password-reset": { target: ["api", "v1", "password-reset-requests"], requestMethod: "POST", method: "POST", includeSession: false },
 		"reset-password": { target: ["api", "v1", "password-resets"], requestMethod: "POST", method: "POST", includeSession: false },
 		"sessions": { target: ["api", "v1", "sessions"], requestMethod: id ? "DELETE" : "GET", method: id ? "DELETE" : "GET", includeSession: true },

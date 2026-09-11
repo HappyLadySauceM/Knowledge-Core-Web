@@ -120,9 +120,10 @@ export function AccountActionForm({
     };
   }, [trimmedToken, verification]);
 
-  const showResend = verification && (!trimmedToken || problemKind === "expired" || problemKind === "invalid");
   const showForgotPassword = reset && (problemKind === "expired" || problemKind === "invalid" || problemKind === "used");
-  const showSignIn = (verification && (complete || problemKind === "used")) || (reset && (complete || problemKind === "used"));
+  const showSignIn =
+    (verification && (!trimmedToken || complete || problemKind === "used" || problemKind === "expired" || problemKind === "invalid")) ||
+    (reset && (complete || problemKind === "used"));
   const verifying = verification && Boolean(trimmedToken) && pending && !error && !message;
   const hideVerifyForm = verification && (!trimmedToken || complete || problemKind === "used" || problemKind === "expired" || problemKind === "invalid" || verifying);
 
@@ -137,17 +138,6 @@ export function AccountActionForm({
           <p className="auth-footnote">
             <Link href={`/${locale}/login`}>Continue to sign in</Link>
           </p>
-        ) : null}
-        {showResend ? (
-          <form className="auth-form" data-action="request-verification" onSubmit={submit}>
-            <label>
-              Email
-              <input name="email" type="email" defaultValue={email} required autoComplete="email" />
-            </label>
-            <Button type="submit" size="lg" disabled={pending}>
-              {pending ? "Working…" : "Send a new link"}
-            </Button>
-          </form>
         ) : null}
       </div>
     );

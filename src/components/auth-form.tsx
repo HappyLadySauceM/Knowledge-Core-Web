@@ -10,19 +10,26 @@ import {
   messageForAuthProblem,
   problemFallbackFromBody,
   problemKeyFromBody,
-  verifyEmailHref,
 } from "@/lib/account-action-messages";
 
 type AuthMode = "login" | "register";
 
-export function AuthForm({ locale, mode, next }: { locale: string; mode: AuthMode; next?: string }) {
+export function AuthForm({
+  locale,
+  mode,
+  next,
+  registered = false,
+}: {
+  locale: string;
+  mode: AuthMode;
+  next?: string;
+  registered?: boolean;
+}) {
   const router = useRouter();
   const [error, setError] = useState("");
   const [problemKind, setProblemKind] = useState<AuthProblemKind | "">("");
-  const [submittedEmail, setSubmittedEmail] = useState("");
   const [pending, setPending] = useState(false);
   const isRegister = mode === "register";
-  const recoveryHref = verifyEmailHref(locale, submittedEmail);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -30,7 +37,6 @@ export function AuthForm({ locale, mode, next }: { locale: string; mode: AuthMod
     setError("");
     setProblemKind("");
     const form = new FormData(event.currentTarget);
-    const email = String((isRegister ? form.get("email") : form.get("identifier")) ?? "");
     const payload = isRegister
       ? { username: form.get("username"), email: form.get("email"), password: form.get("password") }
       : { identifier: form.get("identifier"), password: form.get("password") };
@@ -45,11 +51,10 @@ export function AuthForm({ locale, mode, next }: { locale: string; mode: AuthMod
       const mapped = messageForAuthProblem(mode, problemKeyFromBody(data), problemFallbackFromBody(data));
       setProblemKind(mapped.kind);
       setError(mapped.text);
-      setSubmittedEmail(email);
       return;
     }
     if (isRegister) {
-      router.push(`/${locale}/verify-email?email=${encodeURIComponent(email)}`);
+      router.push(`/${locale}/login?registered=1`);
       return;
     }
     router.push(next?.startsWith(`/${locale}/`) ? next : `/${locale}/studio`);
@@ -70,6 +75,11 @@ export function AuthForm({ locale, mode, next }: { locale: string; mode: AuthMod
             ? "A focused space for writing, learning, and sharing."
             : "Your workspace is waiting exactly where you left it."}
         </p>
+        {registered && !isRegister ? (
+          <p className="form-success" role="status">
+            Account created. Sign in, then verify your email from Studio.
+          </p>
+        ) : null}
         <form className="auth-form" onSubmit={submit}>
           {isRegister && (
             <label>
@@ -103,13 +113,6 @@ export function AuthForm({ locale, mode, next }: { locale: string; mode: AuthMod
           {problemKind === "email_conflict" ? (
             <p className="auth-footnote">
               <Link href={`/${locale}/login`}>Sign in</Link>
-              {" · "}
-              <Link href={recoveryHref}>Request a new verification link</Link>
-            </p>
-          ) : null}
-          {problemKind === "email_not_verified" ? (
-            <p className="auth-footnote">
-              <Link href={recoveryHref}>Request a new verification link</Link>
             </p>
           ) : null}
           <Button type="submit" size="lg" disabled={pending}>
@@ -119,13 +122,12 @@ export function AuthForm({ locale, mode, next }: { locale: string; mode: AuthMod
         <p className="auth-footnote">
           {isRegister ? (
             <>
-              Verify your email before signing in.{" "}
-              <Link href={`/${locale}/verify-email`}>Need a new link?</Link>
+              After you create an account, sign in. Studio will remind you to verify your email.{" "}
+              <Link href={`/${locale}/login`}>Already have an account?</Link>
             </>
           ) : (
             <>
-              <Link href={`/${locale}/register`}>Need an account? Create one.</Link>{" "}
-              <Link href={`/${locale}/verify-email`}>Need to verify your email?</Link>
+              <Link href={`/${locale}/register`}>Need an account? Create one.</Link>
             </>
           )}
         </p>

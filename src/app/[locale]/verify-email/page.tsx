@@ -5,9 +5,9 @@ export default async function VerifyEmail({
   searchParams,
 }: {
   params: Promise<{ locale: string }>;
-  searchParams: Promise<{ token?: string; email?: string }>;
+  searchParams: Promise<{ token?: string }>;
 }) {
-  const [{ locale }, { token, email }] = await Promise.all([params, searchParams]);
+  const [{ locale }, { token }] = await Promise.all([params, searchParams]);
   const hasToken = Boolean(token?.trim());
   return (
     <div className="auth-shell container-shell">
@@ -17,9 +17,9 @@ export default async function VerifyEmail({
         <p>
           {hasToken
             ? "We are confirming the link from your Knowledge Core email."
-            : "Open the link in your Knowledge Core email, or enter your address to request a new one."}
+            : "Open the link in your Knowledge Core email, or sign in and resend it from Studio."}
         </p>
-        <AccountActionForm key={token ?? email ?? "verify-email"} action="verify-email" locale={locale} token={token} email={email} />
+        <AccountActionForm key={token ?? "verify-email"} action="verify-email" locale={locale} token={token} />
       </div>
     </div>
   );

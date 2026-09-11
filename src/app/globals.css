@@ -45,6 +45,10 @@ a { color: inherit; text-decoration: none; }
 .document-card small { margin-top: 25px; font-size: 10px; }
 .form-error { margin: 20px 0 0; padding: 10px 12px; color: #c75268; border: 1px solid color-mix(in srgb, #c75268 30%, var(--line)); border-radius: 8px; background: color-mix(in srgb, #c75268 8%, transparent); font-size: 12px; }
 .form-success { margin: 20px 0 0; padding: 10px 12px; color: #2f9a70; border: 1px solid color-mix(in srgb, #2f9a70 30%, var(--line)); border-radius: 8px; background: color-mix(in srgb, #2f9a70 8%, transparent); font-size: 12px; }
+.verify-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; width: min(1440px, calc(100% - 32px)); margin: 12px auto 0; padding: 10px 14px; color: var(--foreground); border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--line)); border-radius: 10px; background: color-mix(in srgb, var(--primary) 8%, var(--surface)); font-size: 13px; }
+.verify-banner strong { font-size: 13px; }
+.verify-banner-actions { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-left: auto; }
+.verify-banner-actions small { color: var(--muted); font-size: 12px; }
 .editorial-home { background: var(--background); }
 .home-hero { min-height: calc(100svh - 74px); display: grid; align-items: end; color: #fff; background-color: #1d2e34; background-size: cover; background-repeat: no-repeat; }
 .home-hero-content { padding-top: 150px; padding-bottom: 58px; }
