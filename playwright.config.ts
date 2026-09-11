@@ -4,7 +4,9 @@ export default defineConfig({
   testDir: "./e2e",
   use: { baseURL: "http://localhost:3000", ...devices["Desktop Chrome"] },
   webServer: {
-    command: process.env.CI ? "node .next/standalone/server.js" : "pnpm dev",
+    // CI uses standalone like the production image, including copied static assets.
+    // CI 与生产镜像一样跑 standalone，并拷贝静态资源，否则客户端 JS 会 404。
+    command: process.env.CI ? "bash scripts/serve-standalone.sh" : "pnpm dev",
     url: "http://localhost:3000",
     reuseExistingServer: !process.env.CI,
     timeout: process.env.CI ? 180_000 : 60_000,
