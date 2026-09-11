@@ -56,3 +56,55 @@ test("hides the reset token and keeps the new password field", async ({ page }) 
   await expect(page.getByLabel("Token")).toHaveCount(0);
   await expect(page.getByLabel("New password")).toBeVisible();
 });
+
+test("offers verification after a register email conflict", async ({ page }) => {
+  await page.route("**/api/bff/auth/register", async (route) => {
+    await route.fulfill({
+      status: 409,
+      contentType: "application/problem+json",
+      body: JSON.stringify({
+        type: "urn:knowledge-core:problem:identity.email_conflict",
+        title: "email already exists",
+        status: 409,
+        key: "identity.email_conflict",
+        detail: "email already exists",
+      }),
+    });
+  });
+  await page.goto("/zh-CN/register");
+  await page.getByLabel("Username").fill("alice");
+  await page.getByLabel("Email").fill("alice@example.com");
+  await page.getByLabel("Password").fill("password1");
+  await page.getByRole("button", { name: "Create account" }).click();
+  await expect(page.locator(".form-error")).toContainText("This email is already registered");
+  await expect(page.getByRole("link", { name: "Sign in" })).toHaveAttribute("href", "/zh-CN/login");
+  await expect(page.getByRole("link", { name: "Request a new verification link" })).toHaveAttribute(
+    "href",
+    "/zh-CN/verify-email?email=alice%40example.com",
+  );
+});
+
+test("offers verification after an unverified login", async ({ page }) => {
+  await page.route("**/api/bff/auth/login", async (route) => {
+    await route.fulfill({
+      status: 403,
+      contentType: "application/problem+json",
+      body: JSON.stringify({
+        type: "urn:knowledge-core:problem:identity.email_not_verified",
+        title: "email verification is required",
+        status: 403,
+        key: "identity.email_not_verified",
+        detail: "email verification is required",
+      }),
+    });
+  });
+  await page.goto("/en/login");
+  await page.getByLabel("Email or username").fill("alice@example.com");
+  await page.getByLabel("Password").fill("password1");
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page.locator(".form-error")).toContainText("Verify your email before signing in");
+  await expect(page.getByRole("link", { name: "Request a new verification link" })).toHaveAttribute(
+    "href",
+    "/en/verify-email?email=alice%40example.com",
+  );
+});

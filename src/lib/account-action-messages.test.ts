@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { messageForAccountProblem } from "@/lib/account-action-messages";
+import { messageForAccountProblem, messageForAuthProblem } from "@/lib/account-action-messages";
 
 describe("messageForAccountProblem", () => {
   it("maps an expired verification token to a resend prompt", () => {
@@ -34,6 +34,36 @@ describe("messageForAccountProblem", () => {
     expect(messageForAccountProblem("verify-email", "identity.internal", "internal identity service error")).toEqual({
       kind: "generic",
       text: "internal identity service error",
+    });
+  });
+});
+
+describe("messageForAuthProblem", () => {
+  it("maps a register email conflict to sign-in and verification copy", () => {
+    expect(messageForAuthProblem("register", "identity.email_conflict", "email already exists")).toEqual({
+      kind: "email_conflict",
+      text: "This email is already registered. Sign in, or request a new verification link if you have not verified yet.",
+    });
+  });
+
+  it("maps a register username conflict without sending the user to verify-email", () => {
+    expect(messageForAuthProblem("register", "identity.username_conflict", "username already exists")).toEqual({
+      kind: "username_conflict",
+      text: "This username is already taken. Choose another username.",
+    });
+  });
+
+  it("maps an unverified login to a verification prompt", () => {
+    expect(messageForAuthProblem("login", "identity.email_not_verified", "email verification is required")).toEqual({
+      kind: "email_not_verified",
+      text: "Verify your email before signing in. Open the link from your inbox, or request a new one.",
+    });
+  });
+
+  it("keeps invalid credentials on the gateway fallback copy", () => {
+    expect(messageForAuthProblem("login", "identity.invalid_credentials", "invalid credentials")).toEqual({
+      kind: "generic",
+      text: "invalid credentials",
     });
   });
 });
