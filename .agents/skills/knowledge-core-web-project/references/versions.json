@@ -1,10 +1,10 @@
 {
   "documents": {
     "architecture": {
-      "enDigest": "ecd359e615574d69f56b19f1d8c7fe63d2333511c47f47329450d2a2f9985ac0",
-      "syncedEnDigest": "ecd359e615574d69f56b19f1d8c7fe63d2333511c47f47329450d2a2f9985ac0",
-      "syncedZhDigest": "2b4e11e3f91e816a0bc9783c8b838076bd404ccbda36f4ffb017031d5668cb3f",
-      "zhDigest": "2b4e11e3f91e816a0bc9783c8b838076bd404ccbda36f4ffb017031d5668cb3f"
+      "enDigest": "ea609adfa2e1c0d1176314790e3c210d9406709c0b8706ae9e13c6ff2d332d85",
+      "syncedEnDigest": "ea609adfa2e1c0d1176314790e3c210d9406709c0b8706ae9e13c6ff2d332d85",
+      "syncedZhDigest": "81c94abf5831e96d3d2aa32f664c720abaf9b59cb1e09c9565a34b4fb5108429",
+      "zhDigest": "81c94abf5831e96d3d2aa32f664c720abaf9b59cb1e09c9565a34b4fb5108429"
     },
     "constraints": {
       "enDigest": "f243c32584a5f861ebd67e2a22a88555333079a5fb2f08b4e686877329fa939f",

@@ -179,4 +179,4 @@ flowchart LR
 - **mitigation**: Keep those environment definitions unnamed beyond kind; never invent namespaces, replica counts, or digests.
 
 
-<!-- fact:architecture.design status:verified sources:docs/technical-plan.md, user-confirmed-web-bff-session-layer -->
+<!-- fact:architecture.design status:verified sources:docs/superpowers/plans/2026-09-14-studio-shell-empty-state.md#studio-shell-layout-empty-state, docs/superpowers/plans/2026-09-14-studio-shell-empty-state.md#task-3-empty-state-information-architecture, docs/technical-plan.md, user-confirmed-web-bff-session-layer -->
