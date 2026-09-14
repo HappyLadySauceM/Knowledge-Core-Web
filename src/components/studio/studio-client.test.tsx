@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -32,6 +32,21 @@ const folder = {
   name: "Notes",
   depth: 0,
   revision: 1,
+  created_at: "2026-01-01T00:00:00Z",
+  updated_at: "2026-01-01T00:00:00Z",
+};
+
+const documentSummary = {
+  id: "doc_1",
+  title: "Notes",
+  summary: "A note",
+  slug: "notes",
+  owner: { id: "u1", username: "ada", avatar: "" },
+  access: "owner",
+  published: false,
+  publication_status: "draft" as const,
+  metadata_revision: 1,
+  content_revision: 1,
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",
 };
@@ -73,9 +88,28 @@ describe("Studio dialogs and search", () => {
     expect(documentsApi.create).not.toHaveBeenCalled();
   });
 
-  it("debounces document search before querying Gateway", async () => {
+  it("renders a two-column workspace and a primary empty state", async () => {
+    const { container } = renderWithQuery(<StudioClient locale="en" />);
+    expect(container.querySelector(".studio-workspace")).toBeTruthy();
+    expect(await screen.findByRole("heading", { level: 1, name: "All documents" })).toBeVisible();
+    expect(await screen.findByRole("status")).toHaveTextContent("Start with one clear idea");
+    expect(screen.getByRole("status")).toHaveTextContent("Draft a note, an essay, or a research thread");
+    expect(screen.getAllByRole("button", { name: "New document" }).length).toBeGreaterThan(0);
+    expect(screen.queryByLabelText("Search documents")).toBeNull();
+  });
+
+  it("shows filtered-empty copy when a folder has no documents", async () => {
     renderWithQuery(<StudioClient locale="en" />);
-    await waitFor(() => expect(documentsApi.list).toHaveBeenCalled());
+    fireEvent.click(await screen.findByRole("button", { name: /▱\s*Notes/ }));
+    expect(await screen.findByText("No documents match these filters")).toBeVisible();
+    expect(screen.getByText("Try another search, folder, or publication state — or create a new document.")).toBeVisible();
+    expect(screen.getByLabelText("Search documents")).toBeVisible();
+  });
+
+  it("debounces document search before querying Gateway", async () => {
+    vi.mocked(documentsApi.list).mockResolvedValue({ data: { items: [documentSummary], page: { has_more: false } } });
+    renderWithQuery(<StudioClient locale="en" />);
+    expect(await screen.findByRole("heading", { level: 2, name: "Notes" })).toBeVisible();
     const initialCalls = vi.mocked(documentsApi.list).mock.calls.length;
     vi.useFakeTimers();
     fireEvent.change(screen.getByLabelText("Search documents"), { target: { value: "notes" } });
