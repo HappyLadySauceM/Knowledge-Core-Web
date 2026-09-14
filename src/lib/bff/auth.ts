@@ -138,13 +138,20 @@ async function handleRefresh(request: NextRequest) {
 async function handleMapped(request: NextRequest, name: string, id?: string) {
 	if (name === "request-verification") {
 		if (request.method !== "GET" && request.method !== "POST") return problemResponse(405, "Method not allowed");
-		const body = request.method === "GET" ? undefined : ((await readBody(request)) ?? new ArrayBuffer(0));
+		const incoming = request.method === "GET" ? undefined : await readBody(request);
+		const body =
+			request.method === "GET"
+				? undefined
+				: incoming && incoming.byteLength > 0
+					? incoming
+					: new TextEncoder().encode("{}").buffer;
 		const result = await requestGateway(request, ["api", "v1", "email-verification-requests"], {
 			method: request.method,
 			body,
 			session: readSession(request),
 			includeSession: true,
 			retryUnauthorized: true,
+			headers: request.method === "POST" ? { "content-type": "application/json" } : undefined,
 		});
 		if (result.transportError) {
 			const response = transportErrorResponse(result.transportError);

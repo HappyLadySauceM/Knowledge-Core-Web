@@ -77,7 +77,11 @@ export function EmailVerificationBanner({ locale }: { locale: string }) {
   });
   const send = useMutation({
     mutationFn: async () => {
-      const response = await fetch("/api/bff/auth/request-verification", { method: "POST" });
+      const response = await fetch("/api/bff/auth/request-verification", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      });
       const body: unknown = await response.json().catch(() => ({}));
       if (!response.ok) {
         if (problemKeyFromBody(body) === "identity.verification_cooldown") {

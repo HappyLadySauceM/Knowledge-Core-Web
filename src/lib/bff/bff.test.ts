@@ -181,4 +181,14 @@ describe("web BFF session layer", () => {
 		expect(await response.json()).toEqual({ state: "pending", retry_after_seconds: 60, expires_at: "2026-09-11T04:00:00Z" });
 		expect(new Headers(fetchMock.mock.calls[0]?.[1]?.headers).get("authorization")).toBe("Bearer access-old");
 	});
+
+	it("posts an empty JSON object when requesting a verification email", async () => {
+		fetchMock.mockResolvedValueOnce(jsonResponse({ state: "pending", retry_after_seconds: 1800, expires_at: "2026-09-11T04:30:00Z" }));
+		const response = await handleAuth(request("/api/bff/auth/request-verification", { method: "POST", origin: webOrigin, cookies: "kc_access=access-old" }), ["request-verification"]);
+
+		expect(response.status).toBe(200);
+		expect(new Headers(fetchMock.mock.calls[0]?.[1]?.headers).get("content-type")).toBe("application/json");
+		expect(new Headers(fetchMock.mock.calls[0]?.[1]?.headers).get("authorization")).toBe("Bearer access-old");
+		expect(new TextDecoder().decode(fetchMock.mock.calls[0]?.[1]?.body as ArrayBuffer)).toBe("{}");
+	});
 });

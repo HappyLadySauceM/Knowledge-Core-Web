@@ -72,7 +72,7 @@ export async function refreshGateway(request: NextRequest, refreshToken: string)
 	}
 }
 
-export async function requestGateway(request: NextRequest, segments: string[], options: { method?: string; body?: ArrayBuffer; accessToken?: string; session?: SessionCredentials; retryUnauthorized?: boolean; includeSession?: boolean } = {}): Promise<GatewayRequestResult> {
+export async function requestGateway(request: NextRequest, segments: string[], options: { method?: string; body?: ArrayBuffer; accessToken?: string; session?: SessionCredentials; retryUnauthorized?: boolean; includeSession?: boolean; headers?: HeadersInit } = {}): Promise<GatewayRequestResult> {
 	const path = gatewayPath(segments);
 	if (!path) return { refreshRejected: false, secondUnauthorized: false, response: problemResponse(404, "Gateway route not found") };
 	if (contentLengthTooLarge(request)) return { refreshRejected: false, secondUnauthorized: false, response: problemResponse(413, "Request body too large") };
@@ -84,7 +84,7 @@ export async function requestGateway(request: NextRequest, segments: string[], o
 	const body = options.body;
 	const makeRequest = async (accessToken?: string) => fetchWithTimeout(gatewayURL(request, path), {
 		method,
-		headers: requestHeaders(request, includeSession ? accessToken : undefined),
+		headers: requestHeaders(request, includeSession ? accessToken : undefined, options.headers),
 		body: method === "GET" || method === "HEAD" ? undefined : body,
 		redirect: "manual",
 	});

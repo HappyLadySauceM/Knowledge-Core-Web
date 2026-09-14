@@ -11,6 +11,7 @@ import {
   problemFallbackFromBody,
   problemKeyFromBody,
 } from "@/lib/account-action-messages";
+import { getMessages } from "@/lib/i18n";
 
 type AuthMode = "login" | "register";
 
@@ -26,10 +27,12 @@ export function AuthForm({
   registered?: boolean;
 }) {
   const router = useRouter();
+  const t = getMessages(locale);
   const [error, setError] = useState("");
   const [problemKind, setProblemKind] = useState<AuthProblemKind | "">("");
   const [pending, setPending] = useState(false);
   const isRegister = mode === "register";
+  const copy = isRegister ? t.register : t.login;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -48,7 +51,7 @@ export function AuthForm({
     const data: unknown = await response.json().catch(() => ({}));
     setPending(false);
     if (!response.ok) {
-      const mapped = messageForAuthProblem(mode, problemKeyFromBody(data), problemFallbackFromBody(data));
+      const mapped = messageForAuthProblem(mode, problemKeyFromBody(data), problemFallbackFromBody(data), locale);
       setProblemKind(mapped.kind);
       setError(mapped.text);
       return;
@@ -64,43 +67,39 @@ export function AuthForm({
   return (
     <div className="auth-shell container-shell">
       <Link className="back-link" href={`/${locale}`}>
-        <ArrowLeft size={15} /> Back
+        <ArrowLeft size={15} /> {t.common.back}
       </Link>
       <div className="auth-card">
         <div className="auth-icon">{isRegister ? <UserPlus size={20} /> : <KeyRound size={20} />}</div>
-        <p className="eyebrow">{isRegister ? "Create your workspace" : "Welcome back"}</p>
-        <h1>{isRegister ? "Start your core." : "Sign in to your core."}</h1>
-        <p>
-          {isRegister
-            ? "A focused space for writing, learning, and sharing."
-            : "Your workspace is waiting exactly where you left it."}
-        </p>
+        <p className="eyebrow">{copy.eyebrow}</p>
+        <h1>{copy.title}</h1>
+        <p>{copy.body}</p>
         {registered && !isRegister ? (
           <p className="form-success" role="status">
-            Account created. Sign in, then verify your email from Studio.
+            {t.login.registered}
           </p>
         ) : null}
         <form className="auth-form" onSubmit={submit}>
           {isRegister && (
             <label>
-              Username
+              {t.auth.username}
               <input name="username" required minLength={3} maxLength={32} autoComplete="username" />
             </label>
           )}
           {isRegister && (
             <label>
-              Email
+              {t.auth.email}
               <input name="email" type="email" required autoComplete="email" />
             </label>
           )}
           {!isRegister && (
             <label>
-              Email or username
+              {t.auth.identifier}
               <input name="identifier" required autoComplete="username" />
             </label>
           )}
           <label>
-            Password
+            {t.auth.password}
             <input
               name="password"
               type="password"
@@ -112,22 +111,23 @@ export function AuthForm({
           {error ? <p className="form-error" role="alert">{error}</p> : null}
           {problemKind === "email_conflict" ? (
             <p className="auth-footnote">
-              <Link href={`/${locale}/login`}>Sign in</Link>
+              <Link href={`/${locale}/login`}>{t.auth.signIn}</Link>
             </p>
           ) : null}
           <Button type="submit" size="lg" disabled={pending}>
-            {pending ? "Working…" : isRegister ? "Create account" : "Continue"}
+            {pending ? t.common.working : isRegister ? t.auth.createAccount : t.login.submit}
           </Button>
         </form>
         <p className="auth-footnote">
           {isRegister ? (
             <>
-              After you create an account, sign in. Studio will remind you to verify your email.{" "}
-              <Link href={`/${locale}/login`}>Already have an account?</Link>
+              {t.auth.registerHint}{" "}
+              <Link href={`/${locale}/login`}>{t.auth.alreadyHaveAccount}</Link>
             </>
           ) : (
             <>
-              <Link href={`/${locale}/register`}>Need an account? Create one.</Link>
+              <Link href={`/${locale}/register`}>{t.auth.needAccount}</Link>{" "}
+              <Link href={`/${locale}/forgot-password`}>{t.auth.forgotPassword}</Link>
             </>
           )}
         </p>
