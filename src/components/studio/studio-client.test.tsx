@@ -1,14 +1,19 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { StudioClient, StudioFolders } from "@/components/studio/studio-client";
 import { documentsApi } from "@/lib/api/documents";
 import { foldersApi } from "@/lib/api/folders";
-import { SEARCH_DEBOUNCE_MS } from "@/lib/use-debounced-value";
+
+const navigationState = vi.hoisted(() => ({
+  searchParams: new URLSearchParams(),
+  router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
+}));
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  useRouter: () => navigationState.router,
+  useSearchParams: () => navigationState.searchParams,
 }));
 
 vi.mock("@/lib/api/documents", () => ({
@@ -56,8 +61,9 @@ function renderWithQuery(ui: ReactElement) {
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
 }
 
-describe("Studio dialogs and search", () => {
+describe("Studio dialogs and URL filters", () => {
   beforeEach(() => {
+    navigationState.searchParams = new URLSearchParams();
     vi.mocked(foldersApi.list).mockResolvedValue({ data: { items: [folder] } });
     vi.mocked(foldersApi.create).mockReset();
     vi.mocked(foldersApi.update).mockReset();
@@ -98,29 +104,24 @@ describe("Studio dialogs and search", () => {
     expect(screen.queryByLabelText("Search documents")).toBeNull();
   });
 
-  it("shows filtered-empty copy when a folder has no documents", async () => {
+  it("shows filtered-empty copy when a folder URL has no documents", async () => {
+    navigationState.searchParams = new URLSearchParams("folder=fld_1");
     renderWithQuery(<StudioClient locale="en" />);
-    fireEvent.click(await screen.findByRole("button", { name: /▱\s*Notes/ }));
     expect(await screen.findByText("No documents match these filters")).toBeVisible();
     expect(screen.getByText("Try another search, folder, or publication state — or create a new document.")).toBeVisible();
-    expect(screen.getByLabelText("Search documents")).toBeVisible();
+    expect(screen.getByLabelText("Access")).toBeVisible();
   });
 
-  it("debounces document search before querying Gateway", async () => {
-    vi.mocked(documentsApi.list).mockResolvedValue({ data: { items: [documentSummary], page: { has_more: false } } });
+  it("uses document search and folder values from the URL", async () => {
+    navigationState.searchParams = new URLSearchParams("q=notes&folder=fld_1");
+    vi.mocked(documentsApi.list).mockResolvedValue({
+      data: {
+        items: [{ ...documentSummary, folder_id: "fld_1" }],
+        page: { has_more: false },
+      },
+    });
     renderWithQuery(<StudioClient locale="en" />);
-    expect(await screen.findByRole("heading", { level: 2, name: "Notes" })).toBeVisible();
-    const initialCalls = vi.mocked(documentsApi.list).mock.calls.length;
-    vi.useFakeTimers();
-    fireEvent.change(screen.getByLabelText("Search documents"), { target: { value: "notes" } });
-    expect(documentsApi.list).toHaveBeenCalledTimes(initialCalls);
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(SEARCH_DEBOUNCE_MS - 1);
-    });
-    expect(documentsApi.list).toHaveBeenCalledTimes(initialCalls);
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1);
-    });
-    expect(documentsApi.list).toHaveBeenCalledWith(expect.objectContaining({ q: "notes" }));
+    await waitFor(() => expect(documentsApi.list).toHaveBeenCalledWith(expect.objectContaining({ q: "notes" })));
+    expect(await screen.findByRole("heading", { name: "Notes" })).toBeVisible();
   });
 });

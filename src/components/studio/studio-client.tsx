@@ -2,16 +2,16 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FilePlus2, FolderPlus, LoaderCircle, Pencil, Search, Trash2 } from "lucide-react";
+import { FilePlus2, FolderPlus, LoaderCircle, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AppDialog } from "@/components/ui/dialog";
 import { documentsApi, type DocumentFilters } from "@/lib/api/documents";
 import { foldersApi } from "@/lib/api/folders";
 import type { DocumentSummary, Folder } from "@/lib/api/types";
 import { getMessages } from "@/lib/i18n";
-import { SEARCH_DEBOUNCE_MS, useDebouncedValue } from "@/lib/use-debounced-value";
 
 function message(error: unknown) { return error instanceof Error ? error.message : "Request failed"; }
 
@@ -60,31 +60,31 @@ export function StudioClient({ locale }: { locale: string }) {
   const t = getMessages(locale);
   const client = useQueryClient();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [filters, setFilters] = useState<DocumentFilters>({ limit: 50 });
-  const [searchInput, setSearchInput] = useState("");
   const [pages, setPages] = useState<DocumentSummary[]>([]);
-  const [folder, setFolder] = useState<string>();
+  const [pagesSearch, setPagesSearch] = useState(searchParams.get("q") ?? "");
   const [createOpen, setCreateOpen] = useState(false);
-  const debouncedSearch = useDebouncedValue(searchInput.trim(), SEARCH_DEBOUNCE_MS);
-  const listFilters = { ...filters, q: debouncedSearch || undefined };
+  const search = searchParams.get("q") ?? "";
+  const folder = searchParams.get("folder") ?? undefined;
+  const listFilters = { ...filters, q: search || undefined };
   const query = useQuery({ queryKey: ["documents", listFilters], queryFn: () => documentsApi.list(listFilters).then((result) => result.data) });
   const create = useMutation({ mutationFn: (title: string) => documentsApi.create({ title }), onSuccess: ({ data }) => { client.invalidateQueries({ queryKey: ["documents"] }); router.push(`/${locale}/studio/documents/${data.id}`); } });
-  const items = useMemo(() => [...pages, ...(query.data?.items ?? [])].filter((item, index, all) => all.findIndex((candidate) => candidate.id === item.id) === index).filter((item) => !folder || item.folder_id === folder), [pages, query.data, folder]);
-  const hasActiveFilters = Boolean(debouncedSearch || filters.access || filters.publication || folder);
+  const items = useMemo(() => [...(pagesSearch === search ? pages : []), ...(query.data?.items ?? [])].filter((item, index, all) => all.findIndex((candidate) => candidate.id === item.id) === index).filter((item) => !folder || item.folder_id === folder), [pages, pagesSearch, query.data, search, folder]);
+  const hasActiveFilters = Boolean(search || filters.access || filters.publication || folder);
   const isEmptyList = !query.isLoading && !query.error && items.length === 0;
   // Hide list filters until there are documents (or the user is already filtering).
   // 在尚无文档且未筛选时隐藏筛选条，避免空工作区只剩一排空控件。
   const showFilters = hasActiveFilters || items.length > 0;
   function changeFilters(next: Partial<DocumentFilters>) { setPages([]); setFilters((current) => ({ ...current, ...next, cursor: undefined })); }
-  function loadMore() { if (!query.data?.page.next_cursor) return; setPages((current) => [...current, ...query.data.items]); setFilters((current) => ({ ...current, cursor: query.data?.page.next_cursor })); }
+  function loadMore() { if (!query.data?.page.next_cursor) return; setPagesSearch(search); setPages((current) => [...current, ...query.data.items]); setFilters((current) => ({ ...current, cursor: query.data?.page.next_cursor })); }
   function confirmDocument(title: string) {
     if (title) create.mutate(title);
     setCreateOpen(false);
   }
   return <div className="studio-workspace">
-    <aside className="studio-filter-panel"><div className="studio-folders-title"><span>{t.studio.folders}</span></div><StudioFolders locale={locale} selected={folder} onSelect={setFolder} /><Link href={`/${locale}/studio/media`}>{t.studio.mediaLibrary}</Link><Link href={`/${locale}/studio/trash`}>{t.studio.trash}</Link></aside>
     <section className="studio-main-panel"><div className="studio-heading"><div><p className="eyebrow">{t.studio.eyebrow}</p><h1>{t.studio.title}</h1></div><Button onClick={() => setCreateOpen(true)} disabled={create.isPending}><FilePlus2 size={16} />{create.isPending ? t.studio.creating : t.studio.newDocument}</Button></div>
-      {showFilters ? <div className="studio-filters"><label><Search size={15} /><input aria-label={t.studio.searchDocuments} placeholder={t.studio.searchDocuments} value={searchInput} onChange={(event) => setSearchInput(event.target.value)} /></label><select aria-label={t.studio.access} onChange={(event) => changeFilters({ access: (event.target.value || undefined) as DocumentFilters["access"] })}><option value="">{t.studio.allAccess}</option><option value="owner">{t.studio.owned}</option><option value="shared">{t.studio.shared}</option></select><select aria-label={t.studio.publication} onChange={(event) => changeFilters({ publication: (event.target.value || undefined) as DocumentFilters["publication"] })}><option value="">{t.studio.allStates}</option><option value="draft">{t.studio.draft}</option><option value="published">{t.studio.published}</option></select></div> : null}
+      {showFilters ? <div className="studio-filters"><select aria-label={t.studio.access} onChange={(event) => changeFilters({ access: (event.target.value || undefined) as DocumentFilters["access"] })}><option value="">{t.studio.allAccess}</option><option value="owner">{t.studio.owned}</option><option value="shared">{t.studio.shared}</option></select><select aria-label={t.studio.publication} onChange={(event) => changeFilters({ publication: (event.target.value || undefined) as DocumentFilters["publication"] })}><option value="">{t.studio.allStates}</option><option value="draft">{t.studio.draft}</option><option value="published">{t.studio.published}</option></select></div> : null}
       {(create.error || query.error) && <div className="studio-empty"><h2>{t.studio.failed}</h2><p>{message(create.error || query.error)}</p><Button variant="secondary" onClick={() => void query.refetch()}>{t.common.retry}</Button></div>}
       {query.isLoading && <div className="studio-loading"><LoaderCircle className="spin" size={22} />{t.studio.loading}</div>}
       {isEmptyList && <div className="studio-empty" role="status">{!hasActiveFilters && <div className="empty-orbit" aria-hidden="true"><span /><span /><span /></div>}<h2>{hasActiveFilters ? t.studio.emptyFilteredTitle : t.studio.emptyTitle}</h2><p>{hasActiveFilters ? t.studio.emptyFilteredBody : t.studio.emptyBody}</p><Button onClick={() => setCreateOpen(true)} disabled={create.isPending}><FilePlus2 size={16} />{create.isPending ? t.studio.creating : t.studio.newDocument}</Button></div>}

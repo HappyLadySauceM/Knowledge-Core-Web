@@ -518,12 +518,16 @@
     },
     {
       "id": "environment.toolchains",
-      "revision": 59,
+      "revision": 63,
       "section": "environment",
       "sources": [
         {
           "kind": "detected",
           "reference": "detected:toolchain-manifests"
+        },
+        {
+          "kind": "detected",
+          "reference": "package.json"
         },
         {
           "kind": "documented",
@@ -535,7 +539,7 @@
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-09-10T06:01:29Z",
+      "updatedAt": "2026-09-14T07:23:03Z",
       "value": [
         {
           "manifest": "package.json",
@@ -559,13 +563,23 @@
     },
     {
       "id": "security.secrets-and-config",
-      "revision": 58,
+      "revision": 60,
       "section": "conventions",
       "sources": [
         {
-          "detail": "evidence-sha256:7702392da7c148a65c5ad3e966ea1e798199fb2815eb9cc0a1f6b05fd9cd57d2",
+          "detail": "evidence-sha256:746ac0b77850279d3fab40af4c6c906e34182f754038528ce164df8b0a43b197",
           "kind": "documented",
           "reference": "README.md#section"
+        },
+        {
+          "detail": "evidence-sha256:746ac0b77850279d3fab40af4c6c906e34182f754038528ce164df8b0a43b197",
+          "kind": "documented",
+          "reference": "docs/README.md#section"
+        },
+        {
+          "detail": "evidence-sha256:746ac0b77850279d3fab40af4c6c906e34182f754038528ce164df8b0a43b197",
+          "kind": "documented",
+          "reference": "docs/technical-plan.md#section"
         },
         {
           "kind": "user",
@@ -573,7 +587,7 @@
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-09-10T06:00:16Z",
+      "updatedAt": "2026-09-14T07:13:09Z",
       "value": "Inject secrets through GitHub or Kubernetes Secrets only; do not commit plaintext secrets. Authentication cookies are HttpOnly, Secure when the request is HTTPS, and use SameSite Lax for access and Strict for refresh. Logs, metrics, and client bundles must not contain session credentials."
     },
     {
@@ -648,7 +662,7 @@
     },
     {
       "id": "workflows.build",
-      "revision": 59,
+      "revision": 63,
       "section": "workflows",
       "sources": [
         {
@@ -669,7 +683,7 @@
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-09-10T06:01:29Z",
+      "updatedAt": "2026-09-14T07:23:03Z",
       "value": {
         "npm:build": {
           "command": "next build",
@@ -683,12 +697,16 @@
     },
     {
       "id": "workflows.development",
-      "revision": 59,
+      "revision": 63,
       "section": "workflows",
       "sources": [
         {
           "kind": "detected",
           "reference": "detected:project-scripts"
+        },
+        {
+          "kind": "detected",
+          "reference": "package.json"
         },
         {
           "kind": "documented",
@@ -704,7 +722,7 @@
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-09-10T06:01:29Z",
+      "updatedAt": "2026-09-14T07:23:03Z",
       "value": {
         "npm:dev": {
           "command": "next dev",
@@ -718,7 +736,7 @@
     },
     {
       "id": "workflows.quality",
-      "revision": 59,
+      "revision": 63,
       "section": "workflows",
       "sources": [
         {
@@ -739,7 +757,7 @@
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-09-10T06:01:29Z",
+      "updatedAt": "2026-09-14T07:23:03Z",
       "value": {
         "npm:lint": {
           "command": "eslint .",
@@ -753,7 +771,7 @@
     },
     {
       "id": "workflows.test",
-      "revision": 59,
+      "revision": 63,
       "section": "workflows",
       "sources": [
         {
@@ -774,7 +792,7 @@
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-09-10T06:01:29Z",
+      "updatedAt": "2026-09-14T07:23:03Z",
       "value": {
         "npm:test": {
           "command": "vitest run",
@@ -789,7 +807,7 @@
   ],
   "generator": {
     "name": "skill-constructor",
-    "version": "0.8.0"
+    "version": "0.9.0"
   },
   "project": {
     "language": "en",
@@ -797,11 +815,11 @@
     "profile": "generic",
     "slug": "knowledge-core-web"
   },
-  "revision": 59,
+  "revision": 64,
   "scan": {
-    "fingerprint": "df2759878cba14cad61d5a97f64ff8363f903d3752b70e4b545fef333e0cf48e",
-    "inventoryCount": 1020
+    "fingerprint": "3646b557f8705fd5f63f25ca2a61a09d8bfc5af5b207f5550f39671befd7105c",
+    "inventoryCount": 157
   },
   "schemaVersion": 3,
-  "updatedAt": "2026-09-10T06:01:29Z"
+  "updatedAt": "2026-09-14T07:23:12Z"
 }

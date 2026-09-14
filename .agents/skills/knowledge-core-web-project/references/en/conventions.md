@@ -20,4 +20,4 @@ storybook-static, test-results, playwright-report, and .next are generated outpu
 
 Inject secrets through GitHub or Kubernetes Secrets only; do not commit plaintext secrets. Authentication cookies are HttpOnly, Secure when the request is HTTPS, and use SameSite Lax for access and Strict for refresh. Logs, metrics, and client bundles must not contain session credentials.
 
-<!-- fact:security.secrets-and-config status:verified sources:README.md#section, user-confirmed -->
+<!-- fact:security.secrets-and-config status:verified sources:README.md#section, docs/README.md#section, docs/technical-plan.md#section, user-confirmed -->

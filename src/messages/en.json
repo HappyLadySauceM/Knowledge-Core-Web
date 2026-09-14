@@ -18,6 +18,27 @@
     "admin": "Admin",
     "signOut": "Sign out"
   },
+  "backend": {
+    "studio": "Studio",
+    "workspace": "Workspace",
+    "platform": "Platform",
+    "documents": "All documents",
+    "media": "Media library",
+    "trash": "Trash",
+    "editor": "Document editor",
+    "admin": "Configuration",
+    "security": "Account security",
+    "publicSite": "View public site",
+    "account": "Account",
+    "searchPlaceholder": "Search documents…",
+    "notifications": "Notifications",
+    "noNotifications": "No notifications",
+    "navigation": "Studio navigation",
+    "collapse": "Collapse sidebar",
+    "expand": "Expand sidebar",
+    "openMenu": "Open Studio navigation",
+    "closeMenu": "Close Studio navigation"
+  },
   "home": {
     "heroHint": "An open archive of ideas worth keeping",
     "scroll": "Scroll to read",

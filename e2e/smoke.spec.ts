@@ -16,6 +16,7 @@ test("renders the editorial homepage with a full-screen hero", async ({ page }) 
   await page.goto("/en");
   await expect(page.locator(".home-hero")).toBeVisible();
   await expect(page.locator("#articles")).toContainText("Pages worth reading");
+  await expect(page.locator(".site-header")).toBeVisible();
 });
 
 test("renders Chinese login labels, html lang, and a forgot-password link", async ({ page }) => {
@@ -124,6 +125,10 @@ test("shows a Studio reminder only for unverified sessions", async ({ page }) =>
   await page.goto("/zh-CN/studio");
   await expect(page.locator(".verify-banner")).toContainText("请验证邮箱");
   await expect(page.getByRole("button", { name: "发送验证邮件" })).toBeEnabled();
+  await expect(page.locator(".backend-shell")).toBeVisible();
+  await expect(page.locator(".backend-topbar")).toBeVisible();
+  await expect(page.locator(".backend-global-search")).toBeVisible();
+  await expect(page.locator(".site-header")).toHaveCount(0);
 });
 
 test("hides the Studio reminder after the email is verified", async ({ page }) => {

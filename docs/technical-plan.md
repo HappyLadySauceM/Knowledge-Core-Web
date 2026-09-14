@@ -34,13 +34,14 @@ Browser → Next.js BFF（HttpOnly cookie）→ Knowledge-Core Gateway → Ident
 
 当前已实现：
 
-- `/{locale}`：产品首页与视觉入口
-- `/{locale}/studio`：文档、文件夹、筛选与分页工作区
-- `/{locale}/studio/documents/{id}`：Yjs 协作编辑、元数据、成员和版本
-- `/{locale}/studio/media`：通用媒体库
-- `/{locale}/studio/trash`：文档回收站
-- `/{locale}/admin`：管理员业务配置与投递状态
-- `/{locale}/login`：认证入口壳
+- `/{locale}`：产品首页与视觉入口，使用公开站点 Header
+- `/{locale}/studio`：文档、文件夹、筛选与分页工作区，使用独立后台 Shell
+- `/{locale}/studio/documents/{id}`：Yjs 协作编辑、元数据、成员和版本，使用后台 Shell
+- `/{locale}/studio/media`：通用媒体库，使用后台 Shell
+- `/{locale}/studio/trash`：文档回收站，使用后台 Shell
+- `/{locale}/admin`：管理员业务配置与投递状态，使用后台 Shell
+- `/{locale}/settings/security`：会话与账号安全，使用后台 Shell
+- `/{locale}/login`：认证入口壳，使用公开站点 Header
 - `/`：重定向到 `/zh-CN`
 
 上述页面均通过同源 BFF 或服务端 Gateway client 连接真实业务 API；浏览器不持有 Gateway token。

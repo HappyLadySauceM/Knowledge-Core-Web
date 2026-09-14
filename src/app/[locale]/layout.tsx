@@ -2,7 +2,6 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AppProviders } from "@/components/app-providers";
-import { SiteHeader } from "@/components/site-header";
 import { isLocale, locales } from "@/lib/i18n";
 import { getSiteProfile } from "@/lib/site";
 
@@ -22,8 +21,6 @@ export default async function LocaleLayout({
 }: Readonly<{ children: React.ReactNode; params: Promise<{ locale: string }> }>) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
-  const profile = await getSiteProfile();
-
   // Locale layout owns <html lang> so SSR matches /zh-CN vs /en.
   // 由 locale layout 设置 <html lang>，让服务端渲染与 /zh-CN、/en 一致。
   return (
@@ -31,8 +28,7 @@ export default async function LocaleLayout({
       <body>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <AppProviders>
-            <SiteHeader locale={locale} profile={profile} />
-            <main>{children}</main>
+            {children}
           </AppProviders>
         </ThemeProvider>
       </body>

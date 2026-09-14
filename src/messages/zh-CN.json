@@ -18,6 +18,27 @@
     "admin": "管理",
     "signOut": "退出"
   },
+  "backend": {
+    "studio": "Studio",
+    "workspace": "工作区",
+    "platform": "平台",
+    "documents": "全部文档",
+    "media": "媒体库",
+    "trash": "回收站",
+    "editor": "文档编辑器",
+    "admin": "管理配置",
+    "security": "账号安全",
+    "publicSite": "查看公开站点",
+    "account": "账号",
+    "searchPlaceholder": "搜索文档…",
+    "notifications": "通知",
+    "noNotifications": "暂无通知",
+    "navigation": "后台导航",
+    "collapse": "收起侧栏",
+    "expand": "展开侧栏",
+    "openMenu": "打开后台导航",
+    "closeMenu": "关闭后台导航"
+  },
   "home": {
     "heroHint": "一份开放的个人知识档案",
     "scroll": "向下阅读",
