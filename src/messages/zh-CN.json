@@ -59,6 +59,8 @@
     "newDocument": "新建文档",
     "emptyTitle": "从一个清晰的想法开始",
     "emptyBody": "写下一条笔记、一篇文章或一条研究线索。工作区会围绕你的思考方式逐渐成长。",
+    "emptyFilteredTitle": "没有符合条件的文档",
+    "emptyFilteredBody": "试试其他搜索词、文件夹或发布状态，也可以直接新建一篇文档。",
     "loading": "正在加载文档…",
     "failed": "无法加载文档",
     "allFolders": "全部文件夹",

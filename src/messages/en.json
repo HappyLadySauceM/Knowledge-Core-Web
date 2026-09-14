@@ -59,6 +59,8 @@
     "newDocument": "New document",
     "emptyTitle": "Start with one clear idea",
     "emptyBody": "Draft a note, an essay, or a research thread. Your workspace will grow around the way you think.",
+    "emptyFilteredTitle": "No documents match these filters",
+    "emptyFilteredBody": "Try another search, folder, or publication state — or create a new document.",
     "loading": "Loading documents…",
     "failed": "Unable to load documents",
     "allFolders": "All folders",
