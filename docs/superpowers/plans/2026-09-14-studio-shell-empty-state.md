@@ -71,8 +71,8 @@
 
 ### Task 5: Verify and PR against `dev`
 
-- [ ] `pnpm lint`
-- [ ] `pnpm typecheck`
-- [ ] `pnpm test`
-- [ ] Open PR with base `dev` (not `main`). CI/CD fast-forwards `dev` → `main`; do not merge to `main` from this branch
-- [ ] PR summary: cascade cause, before/after, brand + session chrome out of scope
+- [x] `pnpm lint`
+- [x] `pnpm typecheck`
+- [x] `pnpm test`
+- [x] Open PR with base `dev` (not `main`). CI/CD fast-forwards `dev` → `main`; do not merge to `main` from this branch
+- [x] PR summary: cascade cause, before/after, brand + session chrome out of scope

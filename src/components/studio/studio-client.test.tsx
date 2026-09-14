@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -109,7 +109,7 @@ describe("Studio dialogs and search", () => {
   it("debounces document search before querying Gateway", async () => {
     vi.mocked(documentsApi.list).mockResolvedValue({ data: { items: [documentSummary], page: { has_more: false } } });
     renderWithQuery(<StudioClient locale="en" />);
-    await waitFor(() => expect(documentsApi.list).toHaveBeenCalled());
+    expect(await screen.findByRole("heading", { level: 2, name: "Notes" })).toBeVisible();
     const initialCalls = vi.mocked(documentsApi.list).mock.calls.length;
     vi.useFakeTimers();
     fireEvent.change(screen.getByLabelText("Search documents"), { target: { value: "notes" } });
