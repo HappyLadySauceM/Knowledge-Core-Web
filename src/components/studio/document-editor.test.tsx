@@ -115,6 +115,8 @@ describe("DocumentEditor dialogs", () => {
 
   it("does not add a member when the invite dialog is cancelled", async () => {
     renderEditor();
+    expect(await screen.findByRole("button", { name: "Members" })).toBeVisible();
+    expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
     await openPanel("Members");
     fireEvent.click(await screen.findByRole("button", { name: "Add member" }));
     expect(screen.getByRole("dialog")).toBeVisible();

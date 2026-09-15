@@ -27,6 +27,50 @@ test("renders Chinese login labels, html lang, and a forgot-password link", asyn
   await expect(page.getByRole("link", { name: "忘记密码？" })).toHaveAttribute("href", "/zh-CN/forgot-password");
 });
 
+test("redirects to Studio after a successful login", async ({ page }) => {
+  await page.route("**/api/bff/auth/login", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      headers: { "set-cookie": "kc_access=test-access; Path=/; HttpOnly; SameSite=Lax" },
+      body: JSON.stringify({ user: { id: "1" } }),
+    });
+  });
+  await page.route("**/api/bff/auth/session", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        user: {
+          id: "1",
+          username: "alice",
+          avatar: "",
+          email: "alice@example.com",
+          role: "user",
+          status: "active",
+          bio: "",
+          created_at: "2026-01-01T00:00:00Z",
+          updated_at: "2026-01-01T00:00:00Z",
+          email_verified_at: "2026-01-01T01:00:00Z",
+        },
+      }),
+    });
+  });
+  await page.route("**/api/bff/gateway/**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ items: [], page: { has_more: false } }),
+    });
+  });
+  await page.goto("/zh-CN/login");
+  await page.getByLabel("邮箱或用户名").fill("alice@example.com");
+  await page.getByLabel("密码").fill("password1");
+  await page.getByRole("button", { name: "继续" }).click();
+  await expect(page).toHaveURL(/\/zh-CN\/studio$/);
+  await expect(page.locator(".backend-shell")).toBeVisible();
+});
+
 test("protects the studio shell when no session cookie exists", async ({ page }) => {
   await page.goto("/zh-CN/studio");
   await expect(page).toHaveURL(/\/zh-CN\/login\?next=%2Fzh-CN%2Fstudio/);

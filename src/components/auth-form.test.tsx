@@ -2,13 +2,14 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthForm } from "@/components/auth-form";
 
-const { mockPush, mockRefresh } = vi.hoisted(() => ({
+const { mockPush, mockReplace, mockRefresh } = vi.hoisted(() => ({
   mockPush: vi.fn(),
+  mockReplace: vi.fn(),
   mockRefresh: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: mockPush, refresh: mockRefresh }),
+  useRouter: () => ({ push: mockPush, replace: mockReplace, refresh: mockRefresh }),
 }));
 
 describe("AuthForm", () => {
@@ -16,6 +17,7 @@ describe("AuthForm", () => {
 
   beforeEach(() => {
     mockPush.mockReset();
+    mockReplace.mockReset();
     mockRefresh.mockReset();
     vi.stubGlobal("fetch", fetchMock);
     fetchMock.mockReset();
@@ -68,5 +70,26 @@ describe("AuthForm", () => {
     await waitFor(() => {
       expect(mockPush).toHaveBeenCalledWith("/zh-CN/login?registered=1");
     });
+  });
+
+  it("replaces the login page with Studio after a successful login", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ user: { id: "1" } }), { status: 200 }));
+    render(<AuthForm locale="zh-CN" mode="login" />);
+    fireEvent.change(screen.getByLabelText("邮箱或用户名"), { target: { value: "alice" } });
+    fireEvent.change(screen.getByLabelText("密码"), { target: { value: "password1" } });
+    fireEvent.submit(screen.getByRole("button", { name: "继续" }).closest("form")!);
+
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/zh-CN/studio"));
+    expect(mockRefresh).not.toHaveBeenCalled();
+  });
+
+  it("only follows a same-locale next path after login", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ user: { id: "1" } }), { status: 200 }));
+    render(<AuthForm locale="en" mode="login" next="https://evil.example/phishing" />);
+    fireEvent.change(screen.getByLabelText("Email or username"), { target: { value: "alice" } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "password1" } });
+    fireEvent.submit(screen.getByRole("button", { name: "Continue" }).closest("form")!);
+
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/en/studio"));
   });
 });

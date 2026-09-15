@@ -3,7 +3,7 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { LogOut, ShieldCheck, Trash2 } from "lucide-react";
+import { LogOut, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { z } from "zod";
 import { SessionDataSchema } from "@/lib/api/types";
@@ -57,13 +57,6 @@ export function SecuritySettings({ locale = "zh-CN" }: { locale?: string }) {
   const verified = Boolean(account.data?.user?.email_verified_at);
   return (
     <div className="settings-shell container-shell">
-      <div className="settings-heading">
-        <div>
-          <p className="eyebrow">Account security</p>
-          <h1>Sessions and access</h1>
-        </div>
-        <ShieldCheck size={22} />
-      </div>
       {(error || message) && <p className="form-error" role="alert">{message || error?.message}</p>}
       {verified ? (
         <p className="form-success" role="status">

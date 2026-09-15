@@ -35,6 +35,8 @@ describe("MediaLibrary", () => {
     renderWithQuery(<MediaLibrary locale="en" />);
     expect(await screen.findByRole("heading", { name: "No media yet" })).toBeVisible();
     expect(screen.getByText("Upload an image, audio, video, or document and it will appear here.")).toBeVisible();
+    expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
+    expect(screen.queryByText("Back to studio")).toBeNull();
   });
 
   it("does not trash media when the confirm dialog is cancelled", async () => {

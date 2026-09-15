@@ -54,6 +54,7 @@ describe("SecuritySettings", () => {
     });
     renderSettings();
     expect(await screen.findByRole("status")).toHaveTextContent("邮箱已验证");
+    expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
   });
 
   it("does not show verified copy when the email is still pending", async () => {

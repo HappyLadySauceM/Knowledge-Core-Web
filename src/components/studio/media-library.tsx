@@ -1,10 +1,9 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- authenticated media URLs resolve through a short-lived 303 redirect. */
 
-import Link from "next/link";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Download, RotateCcw, Trash2 } from "lucide-react";
+import { Download, RotateCcw, Trash2 } from "lucide-react";
 import { AttachmentUploader } from "@/components/studio/attachment-uploader";
 import { Button } from "@/components/ui/button";
 import { AppDialog } from "@/components/ui/dialog";
@@ -23,8 +22,6 @@ export function MediaLibrary({ locale }: { locale: string }) {
   const mutate = useMutation({ mutationFn: async ({ id, restore }: { id: string; restore: boolean }) => { if (restore) await mediaApi.restore(id); else await mediaApi.remove(id); }, onSuccess: () => client.invalidateQueries({ queryKey: ["media"] }) });
   const empty = !media.isLoading && !media.error && (media.data?.items.length ?? 0) === 0;
   return <section className="management-page">
-    <Link className="back-link-static" href={`/${locale}/studio`}><ArrowLeft size={15} />{t.studio.backToStudio}</Link>
-    <header><p className="eyebrow">{t.studio.assets}</p><h1>{t.studio.mediaLibrary}</h1></header>
     <AttachmentUploader onComplete={() => client.invalidateQueries({ queryKey: ["media"] })} labels={{ title: locale === "zh-CN" ? "上传资源" : "Upload asset", choose: locale === "zh-CN" ? "选择文件" : "Choose file" }} />
     <div className="studio-filters"><select value={category} onChange={(event) => { setCategory(event.target.value); setCursor(undefined); }}><option value="">All categories</option>{["image","audio","video","document","archive","file"].map((value) => <option key={value}>{value}</option>)}</select><select value={status} onChange={(event) => { setStatus(event.target.value); setCursor(undefined); }}><option value="">All states</option>{["pending_upload","scanning","scan_parked","ready","rejected","trashed"].map((value) => <option key={value}>{value}</option>)}</select></div>
     {media.error && <p className="form-error">{media.error.message}</p>}

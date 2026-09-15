@@ -15,6 +15,20 @@ import { getMessages } from "@/lib/i18n";
 
 type AuthMode = "login" | "register";
 
+function safeLoginDestination(locale: string, next?: string) {
+  if (!next) return `/${locale}/studio`;
+  try {
+    const target = new URL(next, window.location.origin);
+    const localeRoot = `/${locale}`;
+    if (target.origin !== window.location.origin || (target.pathname !== localeRoot && !target.pathname.startsWith(`${localeRoot}/`))) {
+      return `/${locale}/studio`;
+    }
+    return `${target.pathname}${target.search}${target.hash}`;
+  } catch {
+    return `/${locale}/studio`;
+  }
+}
+
 export function AuthForm({
   locale,
   mode,
@@ -60,8 +74,7 @@ export function AuthForm({
       router.push(`/${locale}/login?registered=1`);
       return;
     }
-    router.push(next?.startsWith(`/${locale}/`) ? next : `/${locale}/studio`);
-    router.refresh();
+    router.replace(safeLoginDestination(locale, next));
   }
 
   return (
