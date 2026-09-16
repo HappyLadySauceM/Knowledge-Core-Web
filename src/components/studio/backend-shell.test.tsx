@@ -79,4 +79,13 @@ describe("BackendShell", () => {
     expect(screen.getByRole("complementary")).toHaveClass("is-collapsed");
     await waitFor(() => expect(window.localStorage.getItem("knowledge-core:studio-sidebar-collapsed")).toBe("true"));
   });
+
+  it("expands a collapsed sidebar from the brand icon without a separate chevron button", async () => {
+    renderWithQuery(<BackendShell locale="en" profile={{ title: "HappyLadySauce", tagline_zh: "", tagline_en: "", hero_image_url: "", hero_focal_x: 50, hero_focal_y: 50, revision: 1 }}>content</BackendShell>);
+    fireEvent.click(await screen.findByRole("button", { name: "Collapse sidebar" }));
+    expect(screen.queryByRole("button", { name: "Expand sidebar" })).toBeNull();
+    fireEvent.click(screen.getByRole("link", { name: /HappyLadySauce/ }));
+    expect(screen.getByRole("complementary")).not.toHaveClass("is-collapsed");
+    await waitFor(() => expect(window.localStorage.getItem("knowledge-core:studio-sidebar-collapsed")).toBe("false"));
+  });
 });

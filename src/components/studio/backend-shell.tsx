@@ -8,7 +8,6 @@ import {
   Bell,
   ChevronRight,
   ChevronsLeft,
-  ChevronsRight,
   FileText,
   Globe2,
   LayoutDashboard,
@@ -206,13 +205,27 @@ export function BackendShell({ locale, profile, children }: { locale: string; pr
       {mobileOpen ? <button className="backend-sidebar-scrim" type="button" aria-label={t.backend.closeMenu} onClick={closeMobile} /> : null}
       <aside className={sidebarClass} aria-label={t.backend.navigation}>
         <div className="backend-sidebar-header">
-          <Link href={`/${locale}/studio`} className="backend-brand" title={collapsed ? `${profile?.title ?? "HappyLadySauce"} Studio` : undefined} onClick={closeMobile}>
+          <Link
+            href={`/${locale}/studio`}
+            className="backend-brand"
+            title={collapsed && !mobileOpen ? t.backend.expand : undefined}
+            onClick={(event) => {
+              if (collapsed && !mobileOpen) {
+                event.preventDefault();
+                toggleCollapsed();
+                return;
+              }
+              closeMobile();
+            }}
+          >
             <span className="brand-mark">HS</span>
             <span className="backend-brand-copy"><strong>{profile?.title ?? "HappyLadySauce"}</strong><small>Studio</small></span>
           </Link>
-          <button className="backend-collapse-button" type="button" onClick={toggleCollapsed} aria-label={collapsed ? t.backend.expand : t.backend.collapse} title={collapsed ? t.backend.expand : t.backend.collapse}>
-            {collapsed ? <ChevronsRight size={17} /> : <ChevronsLeft size={17} />}
-          </button>
+          {!collapsed || mobileOpen ? (
+            <button className="backend-collapse-button" type="button" onClick={toggleCollapsed} aria-label={t.backend.collapse} title={t.backend.collapse}>
+              <ChevronsLeft size={17} />
+            </button>
+          ) : null}
         </div>
 
         <nav className="backend-navigation">
