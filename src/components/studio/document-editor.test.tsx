@@ -28,8 +28,11 @@ vi.mock("y-indexeddb", () => ({
 
 vi.mock("@/lib/collaboration/provider", () => ({
   KnowledgeWebSocketProvider: class {
+    isSynced = false;
+    whenSynced = new Promise(() => undefined);
     destroy() {}
     retry() {}
+    resync() { return Promise.resolve(); }
   },
 }));
 
@@ -86,24 +89,30 @@ const version = {
   created_at: "2026-01-02T00:00:00Z",
 };
 
-function renderEditor() {
+function renderEditor(locale = "en") {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <DocumentEditor documentId="doc_1" locale="en" />
+      <DocumentEditor documentId="doc_1" locale={locale} />
     </QueryClientProvider>,
   );
 }
 
-async function openPanel(name: string) {
-  fireEvent.click(await screen.findByRole("button", { name }));
+async function openShare() {
+  fireEvent.click(await screen.findByRole("button", { name: "Share" }));
 }
 
-describe("DocumentEditor dialogs", () => {
+async function openMoreItem(name: string) {
+  fireEvent.click(await screen.findByRole("button", { name: "More" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name }));
+}
+
+describe("DocumentEditor chrome", () => {
   beforeEach(() => {
     useEditorMock.mockClear();
     vi.mocked(documentsApi.get).mockResolvedValue({ data: documentSummary });
     vi.mocked(documentsApi.remove).mockReset();
+    vi.mocked(documentsApi.publish).mockReset();
     vi.mocked(foldersApi.list).mockResolvedValue({ data: { items: [] } });
     vi.mocked(membersApi.list).mockResolvedValue({ data: { items: [member] } });
     vi.mocked(membersApi.add).mockReset();
@@ -118,9 +127,44 @@ describe("DocumentEditor dialogs", () => {
     cleanup();
   });
 
+  it("puts the title in the writing surface and page-top share/mode/more/publish chrome", async () => {
+    renderEditor();
+    expect(await screen.findByDisplayValue("Draft one")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Share" })).toBeVisible();
+    expect(screen.getByRole("combobox", { name: "Editing mode" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "More" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Publish" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Publish" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Settings" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Members" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Versions" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
+    expect(screen.queryByText("Connected")).toBeNull();
+    expect(screen.queryByText(/Type \/ to insert/)).toBeNull();
+    expect(screen.getByText(/alice/)).toBeVisible();
+  });
+
+  it("keeps settings without a title field and versions behind the more menu", async () => {
+    renderEditor();
+    await openMoreItem("Document settings");
+    expect(await screen.findByRole("heading", { name: "Document settings" })).toBeVisible();
+    expect(document.querySelector("form input[name='title']")).toBeNull();
+    expect(screen.getByDisplayValue("Draft one")).toBeVisible();
+  });
+
+  it("localizes the former English chrome labels", async () => {
+    renderEditor("zh-CN");
+    expect(await screen.findByRole("button", { name: "分享" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "发布" })).toBeVisible();
+    expect(screen.getByRole("combobox", { name: "编辑模式" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Settings" })).toBeNull();
+    expect(screen.queryByText("Connected")).toBeNull();
+    expect(screen.queryByText("Publish")).toBeNull();
+  });
+
   it("mounts TipTap with studio extensions before collaboration is ready", async () => {
     renderEditor();
-    expect(await screen.findByRole("button", { name: "Members" })).toBeVisible();
+    expect(await screen.findByRole("button", { name: "Share" })).toBeVisible();
     expect(useEditorMock).toHaveBeenCalled();
     const options = useEditorMock.mock.calls[0]?.[0];
     expect(Array.isArray(options?.extensions)).toBe(true);
@@ -129,9 +173,9 @@ describe("DocumentEditor dialogs", () => {
 
   it("does not add a member when the invite dialog is cancelled", async () => {
     renderEditor();
-    expect(await screen.findByRole("button", { name: "Members" })).toBeVisible();
+    expect(await screen.findByRole("button", { name: "Share" })).toBeVisible();
     expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
-    await openPanel("Members");
+    await openShare();
     fireEvent.click(await screen.findByRole("button", { name: "Add member" }));
     expect(screen.getByRole("dialog")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
@@ -140,7 +184,7 @@ describe("DocumentEditor dialogs", () => {
 
   it("does not remove a member when the confirm dialog is cancelled", async () => {
     renderEditor();
-    await openPanel("Members");
+    await openShare();
     fireEvent.click(await screen.findByRole("button", { name: "Remove member" }));
     expect(screen.getByRole("dialog")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
@@ -149,7 +193,7 @@ describe("DocumentEditor dialogs", () => {
 
   it("does not create a version when the label dialog is cancelled", async () => {
     renderEditor();
-    await openPanel("Versions");
+    await openMoreItem("Version history");
     fireEvent.click(await screen.findByRole("button", { name: "Create version" }));
     expect(screen.getByRole("dialog")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
@@ -158,7 +202,7 @@ describe("DocumentEditor dialogs", () => {
 
   it("does not restore a version when the confirm dialog is cancelled", async () => {
     renderEditor();
-    await openPanel("Versions");
+    await openMoreItem("Version history");
     fireEvent.click(await screen.findByRole("button", { name: "Restore" }));
     expect(screen.getByRole("dialog")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
@@ -168,7 +212,7 @@ describe("DocumentEditor dialogs", () => {
 
   it("does not delete a document when the trash dialog is cancelled", async () => {
     renderEditor();
-    await openPanel("Settings");
+    await openMoreItem("Document settings");
     fireEvent.click(await screen.findByRole("button", { name: "Move to trash" }));
     expect(screen.getByRole("dialog")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));

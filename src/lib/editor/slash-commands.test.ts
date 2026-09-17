@@ -3,9 +3,12 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   applySlashCommand,
   filterSlashCommands,
+  groupSlashCommands,
   handleSlashMenuKeydown,
+  isEmptyParagraphCaret,
   matchSlashInEditor,
   matchSlashQuery,
+  openSlashOnEmptyLine,
 } from "@/lib/editor/slash-commands";
 import { createStudioDocumentExtensions } from "@/lib/editor/studio-extensions";
 
@@ -44,6 +47,35 @@ describe("filterSlashCommands", () => {
     const ids = filterSlashCommands("h1").map((item) => item.id);
     expect(ids).toContain("heading1");
     expect(ids).not.toContain("table");
+  });
+});
+
+describe("groupSlashCommands", () => {
+  it("splits the default menu into basic and common groups", () => {
+    const groups = groupSlashCommands(filterSlashCommands(""));
+    expect(groups.map((group) => group.id)).toEqual(["basic", "common"]);
+    expect(groups[0]?.items.map((item) => item.id)).toEqual([
+      "heading1",
+      "heading2",
+      "heading3",
+      "bulletList",
+      "orderedList",
+      "taskList",
+    ]);
+    expect(groups[1]?.items.map((item) => item.id)).toEqual([
+      "blockquote",
+      "codeBlock",
+      "horizontalRule",
+      "table",
+      "link",
+    ]);
+  });
+
+  it("hides empty groups when the query only matches one side", () => {
+    const groups = groupSlashCommands(filterSlashCommands("h1"));
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.id).toBe("basic");
+    expect(groups[0]?.items.map((item) => item.id)).toEqual(["heading1"]);
   });
 });
 
@@ -102,5 +134,27 @@ describe("slash command apply", () => {
     const match = matchSlashInEditor(editor);
     expect(applySlashCommand(editor, match!, "table")).toBe(true);
     expect(editor.isActive("table")).toBe(true);
+  });
+
+  it("clears the slash query for a link command", () => {
+    const editor = createEditor();
+    editor.commands.insertContent("/");
+    const match = matchSlashInEditor(editor);
+    expect(applySlashCommand(editor, match!, "link")).toBe(true);
+    expect(matchSlashInEditor(editor)).toBeNull();
+  });
+});
+
+describe("empty paragraph insert", () => {
+  it("opens slash from an empty paragraph and ignores filled lines", () => {
+    const editor = createEditor();
+    expect(isEmptyParagraphCaret(editor)).toBe(true);
+    expect(openSlashOnEmptyLine(editor)).toBe(true);
+    expect(matchSlashInEditor(editor)?.query).toBe("");
+
+    editor.commands.setContent("<p>Hello</p>");
+    editor.commands.setTextSelection(2);
+    expect(isEmptyParagraphCaret(editor)).toBe(false);
+    expect(openSlashOnEmptyLine(editor)).toBe(false);
   });
 });

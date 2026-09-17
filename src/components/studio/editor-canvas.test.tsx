@@ -71,6 +71,24 @@ describe("EditorCanvas slash menu", () => {
     });
     expect(await screen.findByRole("listbox", { name: "插入块" })).toBeVisible();
     expect(screen.getByRole("option", { name: "一级标题" })).toBeVisible();
+    expect(screen.getByText("基础")).toBeVisible();
+    expect(screen.getByText("常用")).toBeVisible();
+  });
+
+  it("groups slash commands and shows an empty-line insert control", async () => {
+    let editor: Editor | null = null;
+    render(<EditorHarness onReady={(next) => { editor = next; }} />);
+    await waitFor(() => expect(editor).toBeTruthy());
+    expect(await screen.findByRole("button", { name: "Insert block" })).toBeVisible();
+
+    act(() => {
+      editor!.commands.insertContent("/");
+    });
+    expect(await screen.findByRole("listbox", { name: "Insert block" })).toBeVisible();
+    expect(screen.getByText("Basic")).toBeVisible();
+    expect(screen.getByText("Common")).toBeVisible();
+    expect(screen.getByRole("option", { name: "Link" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Insert block" })).toBeNull();
   });
 });
 

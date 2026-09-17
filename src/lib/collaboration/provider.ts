@@ -31,6 +31,8 @@ export function reconnectDelay(attempt: number, random = Math.random()): number 
   return Math.max(0, Math.round(base + jitter));
 }
 
+type SyncedWaiter = { resolve: () => void; reject: (error: Error) => void };
+
 export class KnowledgeWebSocketProvider {
   readonly awareness: awarenessProtocol.Awareness;
   readonly doc: Y.Doc;
@@ -49,6 +51,10 @@ export class KnowledgeWebSocketProvider {
   private connecting = false;
   private terminal = false;
   private destroyed = false;
+  private handshakeRemote = false;
+  private handshakeLocal = false;
+  private synced = false;
+  private syncedWaiters: SyncedWaiter[] = [];
 
   constructor(createConnection: () => Promise<CollaborationConnection>, doc: Y.Doc, options: ProviderOptions = {}) {
     this.createConnection = createConnection;
@@ -72,6 +78,54 @@ export class KnowledgeWebSocketProvider {
     };
     this.attach();
     this.connect();
+  }
+
+  get isSynced() {
+    return this.synced;
+  }
+
+  get whenSynced(): Promise<void> {
+    if (this.synced) return Promise.resolve();
+    if (this.destroyed || this.terminal) return Promise.reject(new Error("Collaboration is not ready"));
+    return new Promise((resolve, reject) => {
+      this.syncedWaiters.push({ resolve, reject });
+    });
+  }
+
+  // Re-run SyncStep1 after a 412 so the next publish uses the persisted vector.
+  // 412 后重发 SyncStep1，让下一次发布带上已持久化的 state vector。
+  resync(): Promise<void> {
+    if (this.destroyed || this.terminal) return Promise.reject(new Error("Collaboration is not ready"));
+    const socket = this.socket;
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      return Promise.reject(new Error("Collaboration is not ready"));
+    }
+    this.resetHandshake();
+    this.setStatus("syncing");
+    const encoder = encoding.createEncoder();
+    encoding.writeVarUint(encoder, syncMessage);
+    syncProtocol.writeSyncStep1(encoder, this.doc);
+    socket.send(encoding.toUint8Array(encoder));
+    return this.whenSynced;
+  }
+
+  private resetHandshake() {
+    this.handshakeRemote = false;
+    this.handshakeLocal = false;
+    this.synced = false;
+  }
+
+  private completeHandshake() {
+    if (!this.handshakeRemote || !this.handshakeLocal || this.synced) return;
+    this.synced = true;
+    this.setStatus("connected");
+    const waiters = this.syncedWaiters.splice(0);
+    waiters.forEach((waiter) => waiter.resolve());
+  }
+
+  private rejectSyncedWaiters(error: Error) {
+    const waiters = this.syncedWaiters.splice(0);
+    waiters.forEach((waiter) => waiter.reject(error));
   }
 
   private attach() {
@@ -126,6 +180,7 @@ export class KnowledgeWebSocketProvider {
       this.clearConnectTimeout();
       this.reconnectAttempt = 0;
       this.reconnectStartedAt = null;
+      this.resetHandshake();
       this.setStatus("syncing");
       const encoder = encoding.createEncoder();
       encoding.writeVarUint(encoder, syncMessage);
@@ -156,11 +211,13 @@ export class KnowledgeWebSocketProvider {
       this.failTerminal(new Error(reason || this.messageForCloseCode(code)), code);
       return;
     }
+    this.resetHandshake();
     this.handleFailure(new Error(reason || this.messageForCloseCode(code)));
   }
 
   private handleFailure(reason: Error) {
     if (this.destroyed) return;
+    this.resetHandshake();
     if (this.reconnectStartedAt === null) this.reconnectStartedAt = Date.now();
     if (Date.now() - this.reconnectStartedAt >= reconnectBudgetMs) {
       this.failTerminal(reason);
@@ -178,6 +235,7 @@ export class KnowledgeWebSocketProvider {
   private failTerminal(error: Error, closeCode?: number) {
     if (this.destroyed) return;
     this.terminal = true;
+    this.resetHandshake();
     this.clearConnectTimeout();
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
@@ -186,6 +244,7 @@ export class KnowledgeWebSocketProvider {
     if (closeCode !== undefined) error.message = `${error.message} (${closeCode})`;
     this.notifyError(error);
     this.notifyStatus("offline");
+    this.rejectSyncedWaiters(error);
   }
 
   private messageForCloseCode(code: number) {
@@ -206,14 +265,14 @@ export class KnowledgeWebSocketProvider {
     }
     if (this.socket !== socket) return;
     const decoder = decoding.createDecoder(new Uint8Array(data));
-    let receivedSyncMessage = false;
     while (decoding.hasContent(decoder)) {
       const type = decoding.readVarUint(decoder);
       if (type === syncMessage) {
         const encoder = encoding.createEncoder();
         encoding.writeVarUint(encoder, syncMessage);
-        syncProtocol.readSyncMessage(decoder, encoder, this.doc, this);
-        receivedSyncMessage = true;
+        const syncType = syncProtocol.readSyncMessage(decoder, encoder, this.doc, this);
+        if (syncType === syncProtocol.messageYjsSyncStep2) this.handshakeRemote = true;
+        if (syncType === syncProtocol.messageYjsSyncStep1) this.handshakeLocal = true;
         if (encoding.length(encoder) > 1 && this.socket === socket && socket.readyState === WebSocket.OPEN) {
           socket.send(encoding.toUint8Array(encoder));
         }
@@ -225,7 +284,7 @@ export class KnowledgeWebSocketProvider {
       }
       break;
     }
-    if (receivedSyncMessage) this.setStatus("connected");
+    this.completeHandshake();
   }
 
   private sendUpdate(update: Uint8Array) {
@@ -266,5 +325,6 @@ export class KnowledgeWebSocketProvider {
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
     this.detach();
+    this.rejectSyncedWaiters(new Error("Collaboration is not ready"));
   }
 }

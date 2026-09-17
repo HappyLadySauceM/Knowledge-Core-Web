@@ -1,14 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { Editor } from "@tiptap/core";
 import { EditorContent } from "@tiptap/react";
 import { editorMenuStyle, shouldShowSelectionToolbar } from "@/lib/editor/selection-toolbar";
+import { Plus } from "lucide-react";
 import {
   applySlashCommand,
   filterSlashCommands,
   handleSlashMenuKeydown,
+  isEmptyParagraphCaret,
   matchSlashInEditor,
+  openSlashOnEmptyLine,
+  type SlashCommandId,
   type SlashMatch,
 } from "@/lib/editor/slash-commands";
 import { getMessages } from "@/lib/i18n";
@@ -31,6 +35,23 @@ function editorViewDom(editor: Editor): HTMLElement | null {
   }
 }
 
+function insertControlStyle(editor: Editor): CSSProperties {
+  try {
+    const rect = editor.view.coordsAtPos(editor.state.selection.from);
+    if (!rect || (rect.top === 0 && rect.left === 0 && rect.bottom === 0)) {
+      return { position: "fixed", top: 120, left: 16, zIndex: 20 };
+    }
+    return {
+      position: "fixed",
+      top: Math.round(rect.top + (rect.bottom - rect.top) / 2 - 11),
+      left: Math.max(8, Math.round(rect.left - 36)),
+      zIndex: 20,
+    };
+  } catch {
+    return { position: "fixed", top: 120, left: 16, zIndex: 20 };
+  }
+}
+
 export function EditorCanvas({ editor, locale, onRequestLink }: EditorCanvasProps) {
 
   const t = getMessages(locale);
@@ -43,6 +64,13 @@ export function EditorCanvas({ editor, locale, onRequestLink }: EditorCanvasProp
   const activeIndex = items.length === 0 ? 0 : Math.min(selectedIndex, items.length - 1);
   const slashOpen = Boolean(slash);
   const showToolbar = editor ? shouldShowSelectionToolbar(editor, slashOpen) : false;
+  const showInsert = Boolean(editor?.isEditable && !slashOpen && editor && isEmptyParagraphCaret(editor));
+
+  const runSlash = useCallback((id: SlashCommandId) => {
+    if (!editor || !slash) return;
+    applySlashCommand(editor, slash, id);
+    if (id === "link") onRequestLink();
+  }, [editor, slash, onRequestLink]);
 
   useEffect(() => {
     if (!editor) return undefined;
@@ -82,7 +110,7 @@ export function EditorCanvas({ editor, locale, onRequestLink }: EditorCanvasProp
         onConfirm: () => {
           const item = items[activeIndex];
           if (!item) return;
-          applySlashCommand(editor, slash, item.id);
+          runSlash(item.id);
         },
         onClose: () => {
           dismissedKeyRef.current = `${slash.from}:${slash.query}`;
@@ -106,7 +134,7 @@ export function EditorCanvas({ editor, locale, onRequestLink }: EditorCanvasProp
       editor.off("create", attach);
       viewDom?.removeEventListener("keydown", onKeyDown, true);
     };
-  }, [editor, slash, items, activeIndex]);
+  }, [editor, slash, items, activeIndex, onRequestLink, runSlash]);
 
   return (
     <div className="document-editor-canvas">
@@ -118,10 +146,22 @@ export function EditorCanvas({ editor, locale, onRequestLink }: EditorCanvasProp
           labels={t.editor}
           style={editorMenuStyle(editor, slash.from, "below")}
           onHover={setSelectedIndex}
-          onSelect={(id) => {
-            applySlashCommand(editor, slash, id);
-          }}
+          onSelect={runSlash}
         />
+      ) : null}
+      {editor && showInsert ? (
+        <button
+          type="button"
+          className="editor-insert-control"
+          aria-label={t.editor.slashLabel}
+          style={insertControlStyle(editor)}
+          onMouseDown={(event) => {
+            event.preventDefault();
+            openSlashOnEmptyLine(editor);
+          }}
+        >
+          <Plus size={14} />
+        </button>
       ) : null}
       {editor && showToolbar ? (
         <EditorSelectionToolbar

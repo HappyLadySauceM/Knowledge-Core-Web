@@ -11,9 +11,13 @@ export const SLASH_COMMAND_IDS = [
   "codeBlock",
   "horizontalRule",
   "table",
+  "link",
 ] as const;
 
 export type SlashCommandId = (typeof SLASH_COMMAND_IDS)[number];
+
+export const SLASH_GROUP_IDS = ["basic", "common"] as const;
+export type SlashGroupId = (typeof SLASH_GROUP_IDS)[number];
 
 export type SlashCommand = {
   id: SlashCommandId;
@@ -24,6 +28,16 @@ export type SlashMatch = {
   from: number;
   to: number;
   query: string;
+};
+
+export type SlashCommandGroup = {
+  id: SlashGroupId;
+  items: SlashCommand[];
+};
+
+export const SLASH_GROUP_COMMANDS: Record<SlashGroupId, readonly SlashCommandId[]> = {
+  basic: ["heading1", "heading2", "heading3", "bulletList", "orderedList", "taskList"],
+  common: ["blockquote", "codeBlock", "horizontalRule", "table", "link"],
 };
 
 export const SLASH_COMMANDS: readonly SlashCommand[] = [
@@ -37,6 +51,7 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
   { id: "codeBlock", keywords: ["code", "pre", "代码"] },
   { id: "horizontalRule", keywords: ["divider", "hr", "line", "分割", "分隔"] },
   { id: "table", keywords: ["table", "grid", "表格"] },
+  { id: "link", keywords: ["link", "url", "href", "链接"] },
 ];
 
 // Match `/query` only when it is the whole textblock (optional leading whitespace).
@@ -62,6 +77,22 @@ export function matchSlashInEditor(editor: Editor): SlashMatch | null {
   };
 }
 
+// Show the empty-line insert control only in an empty paragraph caret.
+// 仅在空段落光标处显示行首插入控件。
+export function isEmptyParagraphCaret(editor: Editor): boolean {
+  const { selection } = editor.state;
+  if (!selection.empty) return false;
+  const { $from } = selection;
+  if ($from.parent.type.name !== "paragraph") return false;
+  if ($from.parent.type.spec.code) return false;
+  return $from.parent.content.size === 0;
+}
+
+export function openSlashOnEmptyLine(editor: Editor): boolean {
+  if (!isEmptyParagraphCaret(editor)) return false;
+  return editor.chain().focus().insertContent("/").run();
+}
+
 export function filterSlashCommands(query: string): SlashCommand[] {
   const normalized = query.trim().toLowerCase();
   if (!normalized) return [...SLASH_COMMANDS];
@@ -72,6 +103,13 @@ export function filterSlashCommands(query: string): SlashCommand[] {
       return value.includes(normalized) || normalized.includes(value);
     });
   });
+}
+
+export function groupSlashCommands(items: SlashCommand[]): SlashCommandGroup[] {
+  return SLASH_GROUP_IDS.map((id) => ({
+    id,
+    items: items.filter((item) => SLASH_GROUP_COMMANDS[id].includes(item.id)),
+  })).filter((group) => group.items.length > 0);
 }
 
 export function applySlashCommand(editor: Editor, match: SlashMatch, id: SlashCommandId): boolean {
@@ -97,6 +135,8 @@ export function applySlashCommand(editor: Editor, match: SlashMatch, id: SlashCo
       return chain.setHorizontalRule().run();
     case "table":
       return chain.insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+    case "link":
+      return chain.run();
   }
 }
 
