@@ -11,11 +11,11 @@ vi.mock("next/navigation", () => ({
 }));
 
 const { useEditorMock } = vi.hoisted(() => ({
-  useEditorMock: vi.fn(() => null),
+  useEditorMock: vi.fn((_options?: { extensions?: unknown[] }, _deps?: unknown[]) => null),
 }));
 
 vi.mock("@tiptap/react", () => ({
-  useEditor: (...args: unknown[]) => useEditorMock(...args),
+  useEditor: (options?: { extensions?: unknown[] }, deps?: unknown[]) => useEditorMock(options, deps),
   EditorContent: () => null,
 }));
 
@@ -122,9 +122,9 @@ describe("DocumentEditor dialogs", () => {
     renderEditor();
     expect(await screen.findByRole("button", { name: "Members" })).toBeVisible();
     expect(useEditorMock).toHaveBeenCalled();
-    const options = useEditorMock.mock.calls[0]?.[0] as { extensions?: unknown[] };
-    expect(Array.isArray(options.extensions)).toBe(true);
-    expect(options.extensions?.length).toBeGreaterThan(0);
+    const options = useEditorMock.mock.calls[0]?.[0];
+    expect(Array.isArray(options?.extensions)).toBe(true);
+    expect(options?.extensions?.length).toBeGreaterThan(0);
   });
 
   it("does not add a member when the invite dialog is cancelled", async () => {
