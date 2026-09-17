@@ -21,7 +21,18 @@ type EditorCanvasProps = {
   onRequestLink: () => void;
 };
 
+// TipTap 3 throws until EditorContent mounts the ProseMirror view.
+// TipTap 3 在 EditorContent 挂上 ProseMirror view 之前访问 view.dom 会抛错。
+function editorViewDom(editor: Editor): HTMLElement | null {
+  try {
+    return editor.view.dom;
+  } catch {
+    return null;
+  }
+}
+
 export function EditorCanvas({ editor, locale, onRequestLink }: EditorCanvasProps) {
+
   const t = getMessages(locale);
   const [slash, setSlash] = useState<SlashMatch | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -80,10 +91,21 @@ export function EditorCanvas({ editor, locale, onRequestLink }: EditorCanvasProp
       });
       if (handled) event.stopPropagation();
     };
-    // Capture so Enter/Escape reach the menu before ProseMirror inserts a paragraph.
-    // 在捕获阶段拦截，避免 Enter/Escape 先被 ProseMirror 当成换段。
-    editor.view.dom.addEventListener("keydown", onKeyDown, true);
-    return () => editor.view.dom.removeEventListener("keydown", onKeyDown, true);
+    let viewDom: HTMLElement | null = null;
+    const attach = () => {
+      if (viewDom) return;
+      viewDom = editorViewDom(editor);
+      if (!viewDom) return;
+      // Capture so Enter/Escape reach the menu before ProseMirror inserts a paragraph.
+      // 在捕获阶段拦截，避免 Enter/Escape 先被 ProseMirror 当成换段。
+      viewDom.addEventListener("keydown", onKeyDown, true);
+    };
+    attach();
+    editor.on("create", attach);
+    return () => {
+      editor.off("create", attach);
+      viewDom?.removeEventListener("keydown", onKeyDown, true);
+    };
   }, [editor, slash, items, activeIndex]);
 
   return (
