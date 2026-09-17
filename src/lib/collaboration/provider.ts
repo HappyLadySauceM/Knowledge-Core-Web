@@ -101,6 +101,11 @@ export class KnowledgeWebSocketProvider {
       return Promise.reject(new Error("Collaboration is not ready"));
     }
     this.resetHandshake();
+    // The server only replies to a later SyncStep1 with SyncStep2, not another Step1.
+    // Keep the local half complete so whenSynced can resolve on that Step2.
+    // 服务端对后续 SyncStep1 只回 SyncStep2，不再发 Step1。
+    // 本端半程保持完成，whenSynced 才能在收到这次 Step2 后结束。
+    this.handshakeLocal = true;
     this.setStatus("syncing");
     const encoder = encoding.createEncoder();
     encoding.writeVarUint(encoder, syncMessage);

@@ -58,6 +58,7 @@ export function mapPublishError(error: unknown, copy: PublishSyncCopy): string {
   if (raw === sequenceMismatch || raw.toLowerCase().includes("sequence does not match") || raw.includes("document sequence")) {
     return copy.publishConflict;
   }
+  if (error instanceof ApiError) return copy.publishFailed;
   return raw;
 }
 

@@ -144,6 +144,15 @@ describe("DocumentEditor chrome", () => {
     expect(screen.getByText(/alice/)).toBeVisible();
   });
 
+  it("shows Chinese copy instead of Gateway sequence mismatch text", async () => {
+    vi.mocked(documentsApi.get).mockResolvedValue({
+      data: { ...documentSummary, publication_status: "publish_failed", publication_error: "document sequence does not match" },
+    });
+    renderEditor("zh-CN");
+    expect(await screen.findByText("文档尚未同步完成，请稍后再发布。")).toBeVisible();
+    expect(screen.queryByText(/document sequence does not match/i)).toBeNull();
+  });
+
   it("keeps settings without a title field and versions behind the more menu", async () => {
     renderEditor();
     await openMoreItem("Document settings");

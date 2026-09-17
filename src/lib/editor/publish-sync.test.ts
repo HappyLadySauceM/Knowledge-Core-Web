@@ -61,6 +61,12 @@ describe("mapPublishError", () => {
     expect(mapPublishError(new Error("Collaboration is not ready"), copy)).toBe(copy.publishNotReady);
     expect(mapPublishError(precondition(), copy)).not.toContain("document sequence");
   });
+
+  it("maps other Gateway publish failures to Chinese copy instead of English details", () => {
+    const error = new ApiError(400, { title: "Bad request", status: 400, detail: "invalid state_vector" });
+    expect(mapPublishError(error, copy)).toBe(copy.publishFailed);
+    expect(mapPublishError(error, copy)).not.toContain("state_vector");
+  });
 });
 
 describe("publishAfterSync", () => {

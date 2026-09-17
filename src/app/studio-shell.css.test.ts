@@ -11,4 +11,11 @@ describe("Studio shell cascade", () => {
     expect(globalsCss).toMatch(/\.studio-shell\s*\{\s*display:\s*block;/);
     expect(globalsCss).not.toMatch(/\.studio-shell\s*\{[^}]*grid-template-columns:\s*250px/);
   });
+
+  it("uses a white writing surface without pill-shaped editor chrome", () => {
+    expect(globalsCss).toMatch(/\.document-editor-writing\s*\{[^}]*background:\s*var\(--surface\)/);
+    expect(globalsCss).toMatch(/\.document-editor-page\s*\{[^}]*background:\s*var\(--surface\)/);
+    expect(connectedCss).toMatch(/\.editor-header-actions button\{[^}]*border:0;[^}]*background:transparent/);
+    expect(connectedCss).not.toMatch(/\.editor-header-actions button\{[^}]*border:1px solid var\(--line\)/);
+  });
 });
