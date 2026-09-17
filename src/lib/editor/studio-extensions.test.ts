@@ -27,4 +27,13 @@ describe("createStudioDocumentExtensions", () => {
     expect(editor.chain().focus().toggleUnderline().run()).toBe(true);
     expect(editor.isActive("underline")).toBe(true);
   });
+
+  it("defines the schema top node without collaboration options", () => {
+    const editor = createEditor();
+    expect(editor.schema.topNodeType.name).toBe("doc");
+  });
+
+  it("throws when TipTap is created with an empty extensions array", () => {
+    expect(() => new Editor({ extensions: [] })).toThrow(/top node type \('doc'\)/);
+  });
 });
