@@ -15,17 +15,28 @@ import { getMessages } from "@/lib/i18n";
 
 type AuthMode = "login" | "register";
 
+function isAuthEntryPath(locale: string, pathname: string) {
+  return [`/${locale}/login`, `/${locale}/register`].some(
+    (path) => pathname === path || pathname.startsWith(`${path}/`),
+  );
+}
+
 function safeLoginDestination(locale: string, next?: string) {
-  if (!next) return `/${locale}/studio`;
+  const fallback = `/${locale}/studio`;
+  if (!next) return fallback;
   try {
     const target = new URL(next, window.location.origin);
     const localeRoot = `/${locale}`;
-    if (target.origin !== window.location.origin || (target.pathname !== localeRoot && !target.pathname.startsWith(`${localeRoot}/`))) {
-      return `/${locale}/studio`;
+    if (
+      target.origin !== window.location.origin ||
+      (target.pathname !== localeRoot && !target.pathname.startsWith(`${localeRoot}/`)) ||
+      isAuthEntryPath(locale, target.pathname)
+    ) {
+      return fallback;
     }
     return `${target.pathname}${target.search}${target.hash}`;
   } catch {
-    return `/${locale}/studio`;
+    return fallback;
   }
 }
 
@@ -59,6 +70,7 @@ export function AuthForm({
       : { identifier: form.get("identifier"), password: form.get("password") };
     const response = await fetch(`/api/bff/auth/${mode}`, {
       method: "POST",
+      credentials: "same-origin",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(payload),
     });
@@ -74,7 +86,9 @@ export function AuthForm({
       router.push(`/${locale}/login?registered=1`);
       return;
     }
-    router.replace(safeLoginDestination(locale, next));
+    // Full-load after Set-Cookie so App Router cannot reuse a prefetched unauthenticated 307 back to login.
+    // 登录 Set-Cookie 后整页打开目标，避免 App Router 复用未登录时预取的 307 又回到登录页。
+    window.location.replace(safeLoginDestination(locale, next));
   }
 
   return (

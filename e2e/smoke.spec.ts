@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 test("redirects the root to the default locale", async ({ page }) => {
   await page.goto("/");
@@ -27,13 +27,16 @@ test("renders Chinese login labels, html lang, and a forgot-password link", asyn
   await expect(page.getByRole("link", { name: "忘记密码？" })).toHaveAttribute("href", "/zh-CN/forgot-password");
 });
 
-test("redirects to Studio after a successful login", async ({ page }) => {
+async function mockAuthenticatedBrowserSession(page: Page) {
   await page.route("**/api/bff/auth/login", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
       headers: { "set-cookie": "kc_access=test-access; Path=/; HttpOnly; SameSite=Lax" },
-      body: JSON.stringify({ user: { id: "1" } }),
+      body: JSON.stringify({
+        user: { id: "1", username: "HappyLadySauce", role: "admin" },
+        expires_at: "2026-01-01T01:00:00Z",
+      }),
     });
   });
   await page.route("**/api/bff/auth/session", async (route) => {
@@ -63,7 +66,22 @@ test("redirects to Studio after a successful login", async ({ page }) => {
       body: JSON.stringify({ items: [], page: { has_more: false } }),
     });
   });
+}
+
+test("redirects to Studio after a successful login", async ({ page }) => {
+  await mockAuthenticatedBrowserSession(page);
   await page.goto("/zh-CN/login");
+  await page.getByLabel("邮箱或用户名").fill("alice@example.com");
+  await page.getByLabel("密码").fill("password1");
+  await page.getByRole("button", { name: "继续" }).click();
+  await expect(page).toHaveURL(/\/zh-CN\/studio$/);
+  await expect(page.locator(".backend-shell")).toBeVisible();
+});
+
+test("follows next after login from a protected Studio redirect", async ({ page }) => {
+  await mockAuthenticatedBrowserSession(page);
+  await page.goto("/zh-CN/studio");
+  await expect(page).toHaveURL(/\/zh-CN\/login\?next=%2Fzh-CN%2Fstudio/);
   await page.getByLabel("邮箱或用户名").fill("alice@example.com");
   await page.getByLabel("密码").fill("password1");
   await page.getByRole("button", { name: "继续" }).click();

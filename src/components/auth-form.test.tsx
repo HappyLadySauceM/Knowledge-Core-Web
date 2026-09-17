@@ -2,10 +2,11 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthForm } from "@/components/auth-form";
 
-const { mockPush, mockReplace, mockRefresh } = vi.hoisted(() => ({
+const { mockPush, mockReplace, mockRefresh, mockLocationReplace } = vi.hoisted(() => ({
   mockPush: vi.fn(),
   mockReplace: vi.fn(),
   mockRefresh: vi.fn(),
+  mockLocationReplace: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -19,7 +20,13 @@ describe("AuthForm", () => {
     mockPush.mockReset();
     mockReplace.mockReset();
     mockRefresh.mockReset();
+    mockLocationReplace.mockReset();
     vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("location", {
+      origin: "http://localhost:3000",
+      href: "http://localhost:3000/zh-CN/login",
+      replace: mockLocationReplace,
+    });
     fetchMock.mockReset();
   });
 
@@ -72,15 +79,30 @@ describe("AuthForm", () => {
     });
   });
 
-  it("replaces the login page with Studio after a successful login", async () => {
-    fetchMock.mockResolvedValue(new Response(JSON.stringify({ user: { id: "1" } }), { status: 200 }));
+  it("full-loads Studio after a successful login", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ user: { id: "1", username: "HappyLadySauce", role: "admin" } }), { status: 200 }));
     render(<AuthForm locale="zh-CN" mode="login" />);
     fireEvent.change(screen.getByLabelText("邮箱或用户名"), { target: { value: "alice" } });
     fireEvent.change(screen.getByLabelText("密码"), { target: { value: "password1" } });
     fireEvent.submit(screen.getByRole("button", { name: "继续" }).closest("form")!);
 
-    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/zh-CN/studio"));
+    await waitFor(() => expect(mockLocationReplace).toHaveBeenCalledWith("/zh-CN/studio"));
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/bff/auth/login",
+      expect.objectContaining({ method: "POST", credentials: "same-origin" }),
+    );
+    expect(mockReplace).not.toHaveBeenCalled();
     expect(mockRefresh).not.toHaveBeenCalled();
+  });
+
+  it("full-loads the same-locale next path after login", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ user: { id: "1" } }), { status: 200 }));
+    render(<AuthForm locale="zh-CN" mode="login" next="/zh-CN/studio" />);
+    fireEvent.change(screen.getByLabelText("邮箱或用户名"), { target: { value: "alice" } });
+    fireEvent.change(screen.getByLabelText("密码"), { target: { value: "password1" } });
+    fireEvent.submit(screen.getByRole("button", { name: "继续" }).closest("form")!);
+
+    await waitFor(() => expect(mockLocationReplace).toHaveBeenCalledWith("/zh-CN/studio"));
   });
 
   it("only follows a same-locale next path after login", async () => {
@@ -90,6 +112,16 @@ describe("AuthForm", () => {
     fireEvent.change(screen.getByLabelText("Password"), { target: { value: "password1" } });
     fireEvent.submit(screen.getByRole("button", { name: "Continue" }).closest("form")!);
 
-    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/en/studio"));
+    await waitFor(() => expect(mockLocationReplace).toHaveBeenCalledWith("/en/studio"));
+  });
+
+  it("does not follow a next path that is another auth page", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ user: { id: "1" } }), { status: 200 }));
+    render(<AuthForm locale="zh-CN" mode="login" next="/zh-CN/login?next=%2Fzh-CN%2Fstudio" />);
+    fireEvent.change(screen.getByLabelText("邮箱或用户名"), { target: { value: "alice" } });
+    fireEvent.change(screen.getByLabelText("密码"), { target: { value: "password1" } });
+    fireEvent.submit(screen.getByRole("button", { name: "继续" }).closest("form")!);
+
+    await waitFor(() => expect(mockLocationReplace).toHaveBeenCalledWith("/zh-CN/studio"));
   });
 });
