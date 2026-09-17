@@ -64,11 +64,17 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
   const members = useQuery({ queryKey: ["members", documentId], queryFn: () => membersApi.list(documentId).then((value) => value.data.items), enabled: panel === "members" });
   const versions = useQuery({ queryKey: ["versions", documentId], queryFn: () => versionsApi.list(documentId).then((value) => value.data), enabled: panel === "versions" });
   const metadataRevision = documentQuery.data?.metadata_revision;
+  // TipTap 3 requires a schema top node (`doc`); never pass an empty extensions array.
+  // TipTap 3 需要 schema 顶层节点 `doc`；协作未就绪时也不得传入空扩展数组。
   const editor = useEditor({
-    extensions: doc && provider ? createStudioDocumentExtensions({
-      collaboration: { document: doc, field: "default" },
-      collaborationCaret: { provider: provider as never, user: { name: "You", color: "#6678ff" } },
-    }) : [],
+    extensions: createStudioDocumentExtensions(
+      doc && provider
+        ? {
+            collaboration: { document: doc, field: "default" },
+            collaborationCaret: { provider: provider as never, user: { name: "You", color: "#6678ff" } },
+          }
+        : undefined,
+    ),
     editorProps: { attributes: { class: "document-editor-content" } },
     onTransaction: () => setTransaction((value) => value + 1),
   }, [doc, provider]);

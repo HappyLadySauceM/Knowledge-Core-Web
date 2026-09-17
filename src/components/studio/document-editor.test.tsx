@@ -10,8 +10,12 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 
+const { useEditorMock } = vi.hoisted(() => ({
+  useEditorMock: vi.fn((_options?: { extensions?: unknown[] }, _deps?: unknown[]) => null),
+}));
+
 vi.mock("@tiptap/react", () => ({
-  useEditor: () => null,
+  useEditor: (options?: { extensions?: unknown[] }, deps?: unknown[]) => useEditorMock(options, deps),
   EditorContent: () => null,
 }));
 
@@ -97,6 +101,7 @@ async function openPanel(name: string) {
 
 describe("DocumentEditor dialogs", () => {
   beforeEach(() => {
+    useEditorMock.mockClear();
     vi.mocked(documentsApi.get).mockResolvedValue({ data: documentSummary });
     vi.mocked(documentsApi.remove).mockReset();
     vi.mocked(foldersApi.list).mockResolvedValue({ data: { items: [] } });
@@ -111,6 +116,15 @@ describe("DocumentEditor dialogs", () => {
 
   afterEach(() => {
     cleanup();
+  });
+
+  it("mounts TipTap with studio extensions before collaboration is ready", async () => {
+    renderEditor();
+    expect(await screen.findByRole("button", { name: "Members" })).toBeVisible();
+    expect(useEditorMock).toHaveBeenCalled();
+    const options = useEditorMock.mock.calls[0]?.[0];
+    expect(Array.isArray(options?.extensions)).toBe(true);
+    expect(options?.extensions?.length).toBeGreaterThan(0);
   });
 
   it("does not add a member when the invite dialog is cancelled", async () => {
