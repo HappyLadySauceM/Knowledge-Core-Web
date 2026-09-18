@@ -177,12 +177,13 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
           persistenceSynced: persistenceRef.current?.whenSynced ?? Promise.reject(new Error("Collaboration is not ready")),
           provider,
         }),
+        flush: () => provider?.flushOutbound() ?? Promise.reject(new Error("Collaboration is not ready")),
         encodeStateVector: () => {
           if (!doc) throw new Error("Collaboration is not ready");
           return encodeRawUrlBase64(Y.encodeStateVector(doc));
         },
         publish: (stateVector) => documentsApi.publish(documentId, metadataRevision, stateVector).then((value) => value.data),
-        resync: () => provider?.resync() ?? Promise.reject(new Error("Collaboration is not ready")),
+        flushAndSync: () => provider?.flushAndSync() ?? Promise.reject(new Error("Collaboration is not ready")),
       });
       queryClient.setQueryData(["document", documentId], result);
     } catch (reason) {

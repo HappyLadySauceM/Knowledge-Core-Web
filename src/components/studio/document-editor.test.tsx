@@ -33,6 +33,9 @@ vi.mock("@/lib/collaboration/provider", () => ({
     destroy() {}
     retry() {}
     resync() { return Promise.resolve(); }
+    flushOutbound() { return Promise.resolve(); }
+    flushAndSync() { return Promise.resolve(); }
+
   },
 }));
 
@@ -149,7 +152,9 @@ describe("DocumentEditor chrome", () => {
       data: { ...documentSummary, publication_status: "publish_failed", publication_error: "document sequence does not match" },
     });
     renderEditor("zh-CN");
-    expect(await screen.findByText("文档尚未同步完成，请稍后再发布。")).toBeVisible();
+    expect(await screen.findByText("发布与服务器版本冲突，请稍后重试。")).toBeVisible();
+    expect(screen.queryByText("文档尚未同步完成，请稍后再发布。")).toBeNull();
+
     expect(screen.queryByText(/document sequence does not match/i)).toBeNull();
   });
 

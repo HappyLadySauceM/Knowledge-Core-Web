@@ -10,6 +10,7 @@ const connectTimeoutMs = 10_000;
 const reconnectBudgetMs = 60_000;
 const minReconnectDelayMs = 500;
 const maxReconnectDelayMs = 5_000;
+const defaultIdleMs = 32;
 
 export type CollaborationConnection = {
   websocket_url: string;
@@ -23,6 +24,7 @@ type ProviderOptions = {
   onStatus?: (status: CollaborationStatus) => void;
   onError?: (error: Error) => void;
   onTerminal?: (closeCode: number) => void;
+  idleMs?: number;
 };
 
 export function reconnectDelay(attempt: number, random = Math.random()): number {
@@ -55,10 +57,12 @@ export class KnowledgeWebSocketProvider {
   private handshakeLocal = false;
   private synced = false;
   private syncedWaiters: SyncedWaiter[] = [];
+  private readonly idleMs: number;
 
   constructor(createConnection: () => Promise<CollaborationConnection>, doc: Y.Doc, options: ProviderOptions = {}) {
     this.createConnection = createConnection;
     this.doc = doc;
+    this.idleMs = options.idleMs ?? defaultIdleMs;
     this.awareness = new awarenessProtocol.Awareness(doc);
     this.awareness.setLocalStateField("user", { name: "You", color: "#6678ff" });
     this.notifyStatus = options.onStatus ?? (() => undefined);
@@ -92,8 +96,8 @@ export class KnowledgeWebSocketProvider {
     });
   }
 
-  // Re-run SyncStep1 after a 412 so the next publish uses the persisted vector.
-  // 412 后重发 SyncStep1，让下一次发布带上已持久化的 state vector。
+  // Pull-only SyncStep1. Publish retry must use flushAndSync so the client can push Step2.
+  // 只拉不推的 SyncStep1。发布重试必须走 flushAndSync，才能把本端 Step2 推上去。
   resync(): Promise<void> {
     if (this.destroyed || this.terminal) return Promise.reject(new Error("Collaboration is not ready"));
     const socket = this.socket;
@@ -112,6 +116,56 @@ export class KnowledgeWebSocketProvider {
     syncProtocol.writeSyncStep1(encoder, this.doc);
     socket.send(encoding.toUint8Array(encoder));
     return this.whenSynced;
+  }
+
+  // Wait until outbound doc updates have been written and the doc is briefly idle.
+  // 等到本端 update 都已写出，并再空闲一小段时间。
+  flushOutbound(): Promise<void> {
+    if (this.destroyed || this.terminal) return Promise.reject(new Error("Collaboration is not ready"));
+    return this.waitUntilIdle();
+  }
+
+  // Drain outbound updates, then reconnect so the server sends SyncStep1 and the client can push Step2.
+  // 先排空本端 update，再重连让服务端发 SyncStep1，客户端才能回 Step2 推上本端时钟。
+  async flushAndSync(): Promise<void> {
+    if (this.destroyed || this.terminal) return Promise.reject(new Error("Collaboration is not ready"));
+    await this.waitUntilIdle();
+    if (this.destroyed || this.terminal) return Promise.reject(new Error("Collaboration is not ready"));
+    this.reconnectForHandshake();
+    await this.whenSynced;
+    if (this.destroyed || this.terminal) return Promise.reject(new Error("Collaboration is not ready"));
+    await this.waitUntilIdle();
+  }
+
+  private waitUntilIdle(): Promise<void> {
+    return new Promise((resolve) => {
+      const idleMs = this.idleMs;
+      const onUpdate = () => {
+        clearTimeout(timer);
+        timer = setTimeout(finish, idleMs);
+      };
+      const finish = () => {
+        this.doc.off("update", onUpdate);
+        resolve();
+      };
+      let timer = setTimeout(finish, idleMs);
+      this.doc.on("update", onUpdate);
+    });
+  }
+
+  private reconnectForHandshake() {
+    this.connectGeneration += 1;
+    this.connecting = false;
+    this.resetHandshake();
+    this.clearConnectTimeout();
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
+    const socket = this.socket;
+    this.socket = null;
+    if (socket && socket.readyState < WebSocket.CLOSING) socket.close(1000, "publish sync reconnect");
+    this.reconnectAttempt = 0;
+    this.reconnectStartedAt = null;
+    void this.connect();
   }
 
   private resetHandshake() {

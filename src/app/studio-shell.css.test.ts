@@ -18,4 +18,14 @@ describe("Studio shell cascade", () => {
     expect(connectedCss).toMatch(/\.editor-header-actions button\{[^}]*border:0;[^}]*background:transparent/);
     expect(connectedCss).not.toMatch(/\.editor-header-actions button\{[^}]*border:1px solid var\(--line\)/);
   });
+
+  it("pins document actions under the Studio topbar without sticky writing surface", () => {
+    expect(globalsCss).toMatch(
+      /\.document-editor-page\s*>\s*\.editor-page-heading\s*\{[^}]*position:\s*sticky;[^}]*top:\s*4\.15rem;[^}]*z-index:\s*15/,
+    );
+    expect(globalsCss).not.toMatch(/\.backend-content\s*\{[^}]*overflow:\s*auto/);
+    expect(globalsCss).not.toMatch(/\.document-editor-writing\s*\{[^}]*position:\s*sticky/);
+    expect(globalsCss).not.toMatch(/\.document-editor-shell\s*\{[^}]*position:\s*sticky/);
+  });
 });
+

@@ -160,7 +160,7 @@
     "untitled": "Untitled",
     "byline": "{author} · Updated {time}",
     "publishNotReady": "The document is still syncing. Try publishing again in a moment.",
-    "publishConflict": "The document is still syncing. Try publishing again in a moment.",
+    "publishConflict": "Publish conflicted with the server version. Try again in a moment.",
     "publishFailed": "Publish failed. Try again in a moment.",
     "metadataNotReady": "Document metadata is not ready.",
     "collaborationStartFailed": "Unable to start collaboration",

@@ -102,6 +102,17 @@ a { color: inherit; text-decoration: none; }
 
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .editor-page-heading { display: flex; align-items: center; justify-content: flex-end; gap: .55rem; margin: 0 0 1rem; }
+/* Pin share/mode/publish under the Studio topbar; the writing surface stays in normal flow. */
+/* 把分享/模式/发布钉在 Studio 顶栏下；写作区保持普通文档流。 */
+.document-editor-page > .editor-page-heading {
+  position: sticky;
+  top: 4.15rem;
+  z-index: 15;
+  margin: 0 0 1.1rem;
+  padding: .55rem 0;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(12px);
+}
 .editor-sync-dot { width: 7px; height: 7px; margin-right: auto; border-radius: 99px; background: var(--muted); opacity: .45; }
 .editor-sync-dot[data-status="connected"] { background: #56e0a1; opacity: .5; }
 .editor-sync-dot[data-status="offline"] { background: #c75268; opacity: .8; }

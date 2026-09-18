@@ -160,7 +160,7 @@
     "untitled": "无标题",
     "byline": "{author} · 更新于 {time}",
     "publishNotReady": "文档尚未同步完成，请稍后再发布。",
-    "publishConflict": "文档尚未同步完成，请稍后再发布。",
+    "publishConflict": "发布与服务器版本冲突，请稍后重试。",
     "publishFailed": "发布失败，请稍后重试。",
     "metadataNotReady": "文档元数据尚未就绪。",
     "collaborationStartFailed": "无法开始协作",

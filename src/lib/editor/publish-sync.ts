@@ -64,17 +64,25 @@ export function mapPublishError(error: unknown, copy: PublishSyncCopy): string {
 
 export async function publishAfterSync<T>(input: {
   wait: () => Promise<void>;
+  flush: () => Promise<void>;
   encodeStateVector: () => string;
   publish: (stateVector: string) => Promise<T>;
-  resync: () => Promise<void>;
+  flushAndSync: () => Promise<void>;
+  retryDelayMs?: number;
 }): Promise<T> {
   await input.wait();
+  await input.flush();
   try {
     return await input.publish(input.encodeStateVector());
   } catch (error) {
     if (!isPublishPreconditionFailed(error)) throw error;
-    await input.resync();
-    await input.wait();
+    // Reconnect for a full bidirectional handshake; do not retry with pull-only resync.
+    // 412 后走完整双向握手重连，不再用只拉不推的 resync。
+    await input.flushAndSync();
+    const retryDelayMs = input.retryDelayMs ?? 50;
+    if (retryDelayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+    }
     return input.publish(input.encodeStateVector());
   }
 }

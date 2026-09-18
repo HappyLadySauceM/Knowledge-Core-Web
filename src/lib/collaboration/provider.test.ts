@@ -1,3 +1,4 @@
+import * as decoding from "lib0/decoding";
 import * as encoding from "lib0/encoding";
 import * as syncProtocol from "y-protocols/sync";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -67,7 +68,47 @@ function serverStep2(doc: Y.Doc) {
   return encodeSync((encoder) => syncProtocol.writeSyncStep2(encoder, doc));
 }
 
-async function connectProvider(doc = new Y.Doc()) {
+function syncTypes(payload: Uint8Array): number[] {
+  const decoder = decoding.createDecoder(payload);
+  const types: number[] = [];
+  while (decoding.hasContent(decoder)) {
+    const type = decoding.readVarUint(decoder);
+    if (type === 0) {
+      types.push(decoding.readVarUint(decoder));
+      decoding.readVarUint8Array(decoder);
+      continue;
+    }
+    if (type === 1) {
+      decoding.readVarUint8Array(decoder);
+      continue;
+    }
+    break;
+  }
+  return types;
+}
+
+function applyClientPayload(serverDoc: Y.Doc, payload: Uint8Array) {
+  const decoder = decoding.createDecoder(payload);
+  while (decoding.hasContent(decoder)) {
+    const type = decoding.readVarUint(decoder);
+    if (type === 0) {
+      const encoder = encoding.createEncoder();
+      syncProtocol.readSyncMessage(decoder, encoder, serverDoc, "client");
+      continue;
+    }
+    if (type === 1) {
+      decoding.readVarUint8Array(decoder);
+      continue;
+    }
+    break;
+  }
+}
+
+function stateVectorHex(doc: Y.Doc) {
+  return Buffer.from(Y.encodeStateVector(doc)).toString("hex");
+}
+
+async function connectProvider(doc = new Y.Doc(), idleMs = 0) {
   const provider = new KnowledgeWebSocketProvider(
     async () => ({
       websocket_url: "ws://collaboration.test/v1/documents/doc",
@@ -75,11 +116,21 @@ async function connectProvider(doc = new Y.Doc()) {
       subprotocol: "y-sync",
     }),
     doc,
+    { idleMs },
   );
-  await vi.waitFor(() => expect(sockets.length).toBe(1));
-  const socket = sockets[0]!;
+  await vi.waitFor(() => expect(sockets.length).toBeGreaterThan(0));
+  const socket = sockets[sockets.length - 1]!;
   socket.open();
   return { provider, socket, doc };
+}
+
+async function completeHandshake(socket: FakeWebSocket, serverDoc: Y.Doc) {
+  const before = socket.sent.length;
+  socket.incoming(serverStep1(serverDoc));
+  socket.incoming(serverStep2(serverDoc));
+  for (const payload of socket.sent.slice(before)) {
+    applyClientPayload(serverDoc, payload);
+  }
 }
 
 describe("reconnectDelay", () => {
@@ -118,6 +169,45 @@ describe("KnowledgeWebSocketProvider handshake", () => {
     socket.incoming(serverStep2(serverDoc));
     await expect(resync).resolves.toBeUndefined();
     expect(provider.isSynced).toBe(true);
+
+    provider.destroy();
+  });
+
+  it("does not push local-ahead clocks on pull-only resync, then flushAndSync reconnects with Step2", async () => {
+    vi.stubGlobal("WebSocket", FakeWebSocket);
+    const serverDoc = new Y.Doc();
+    const { provider, socket, doc } = await connectProvider();
+    await completeHandshake(socket, serverDoc);
+    expect(provider.isSynced).toBe(true);
+    expect(stateVectorHex(doc)).toBe(stateVectorHex(serverDoc));
+
+    doc.getMap("root").set("ahead", "local");
+    expect(stateVectorHex(doc)).not.toBe(stateVectorHex(serverDoc));
+
+    const afterLocal = socket.sent.length;
+    const pullOnly = provider.resync();
+    socket.incoming(serverStep2(serverDoc));
+    await pullOnly;
+    const resyncTypes = socket.sent.slice(afterLocal).flatMap(syncTypes);
+    expect(resyncTypes).toContain(syncProtocol.messageYjsSyncStep1);
+    expect(resyncTypes).not.toContain(syncProtocol.messageYjsSyncStep2);
+    expect(stateVectorHex(doc)).not.toBe(stateVectorHex(serverDoc));
+
+    const flushed = provider.flushAndSync();
+    await vi.waitFor(() => expect(sockets.length).toBe(2));
+    const next = sockets[1]!;
+    next.open();
+    const beforeReply = next.sent.length;
+    next.incoming(serverStep1(serverDoc));
+    next.incoming(serverStep2(serverDoc));
+    const reconnectTypes = next.sent.slice(beforeReply).flatMap(syncTypes);
+    expect(reconnectTypes).toContain(syncProtocol.messageYjsSyncStep2);
+    for (const payload of next.sent.slice(beforeReply)) {
+      applyClientPayload(serverDoc, payload);
+    }
+    await flushed;
+    expect(provider.isSynced).toBe(true);
+    expect(stateVectorHex(doc)).toBe(stateVectorHex(serverDoc));
 
     provider.destroy();
   });
