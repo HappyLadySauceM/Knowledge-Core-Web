@@ -40,7 +40,10 @@ export class KnowledgeWebSocketProvider {
   readonly doc: Y.Doc;
   private readonly createConnection: () => Promise<CollaborationConnection>;
   private readonly onUpdate: (update: Uint8Array, origin: unknown) => void;
-  private readonly onAwareness: ({ added, updated, removed }: { added: number[]; updated: number[]; removed: number[] }) => void;
+  private readonly onAwareness: (
+    changes: { added: number[]; updated: number[]; removed: number[] },
+    origin?: unknown,
+  ) => void;
   private readonly notifyStatus: (status: CollaborationStatus) => void;
   private readonly notifyError: (error: Error) => void;
   private readonly notifyTerminal: (closeCode: number) => void;
@@ -71,7 +74,10 @@ export class KnowledgeWebSocketProvider {
     this.onUpdate = (update, origin) => {
       if (origin !== this) this.sendUpdate(update);
     };
-    this.onAwareness = ({ added, updated, removed }) => {
+    this.onAwareness = ({ added, updated, removed }, origin) => {
+      // Server-originated awareness is already broadcast by the actor. Echoing it
+      // back would claim other collaborators' client IDs and trigger protocol 4400.
+      if (origin === this) return;
       const socket = this.socket;
       if (!socket || socket.readyState !== WebSocket.OPEN) return;
       const changed = added.concat(updated, removed);

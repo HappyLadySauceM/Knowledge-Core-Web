@@ -1,6 +1,7 @@
 import * as decoding from "lib0/decoding";
 import * as encoding from "lib0/encoding";
 import * as syncProtocol from "y-protocols/sync";
+import * as awarenessProtocol from "y-protocols/awareness";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as Y from "yjs";
 import { KnowledgeWebSocketProvider, reconnectDelay } from "./provider";
@@ -229,6 +230,32 @@ describe("KnowledgeWebSocketProvider handshake", () => {
     socket.open();
     socket.incoming(new Uint8Array([99]));
     await vi.waitFor(() => expect(onTerminal).toHaveBeenCalledWith(4400));
+    provider.destroy();
+  });
+
+  it("does not echo server-originated awareness updates", async () => {
+    vi.stubGlobal("WebSocket", FakeWebSocket);
+    const provider = new KnowledgeWebSocketProvider(
+      async () => ({
+        websocket_url: "ws://collaboration.test/v1/documents/doc",
+        ticket: "ticket",
+        subprotocol: "y-sync",
+      }),
+      new Y.Doc(),
+    );
+    await vi.waitFor(() => expect(sockets.length).toBeGreaterThan(0));
+    const socket = sockets[sockets.length - 1]!;
+    socket.open();
+    const before = socket.sent.length;
+    const remote = new Y.Doc();
+    const remoteAwareness = new awarenessProtocol.Awareness(remote);
+    remoteAwareness.setLocalStateField("user", { name: "Other", color: "#f00" });
+    const encoder = encoding.createEncoder();
+    encoding.writeVarUint(encoder, 1);
+    encoding.writeVarUint8Array(encoder, awarenessProtocol.encodeAwarenessUpdate(remoteAwareness, [remoteAwareness.clientID]));
+    socket.incoming(encoding.toUint8Array(encoder));
+    expect(socket.sent).toHaveLength(before);
+    remoteAwareness.destroy();
     provider.destroy();
   });
 });
