@@ -4,6 +4,12 @@ export const SLASH_COMMAND_IDS = [
   "heading1",
   "heading2",
   "heading3",
+  "heading4",
+  "heading5",
+  "heading6",
+  "inlineCode",
+  "image",
+  "videoFile",
   "bulletList",
   "orderedList",
   "taskList",
@@ -11,6 +17,9 @@ export const SLASH_COMMAND_IDS = [
   "codeBlock",
   "horizontalRule",
   "table",
+  "columns",
+  "callout",
+  "formula",
   "link",
 ] as const;
 
@@ -36,14 +45,20 @@ export type SlashCommandGroup = {
 };
 
 export const SLASH_GROUP_COMMANDS: Record<SlashGroupId, readonly SlashCommandId[]> = {
-  basic: ["heading1", "heading2", "heading3", "bulletList", "orderedList", "taskList"],
-  common: ["blockquote", "codeBlock", "horizontalRule", "table", "link"],
+  basic: ["heading1", "heading2", "heading3", "heading4", "heading5", "heading6", "inlineCode", "bulletList", "orderedList", "taskList"],
+  common: ["image", "videoFile", "blockquote", "codeBlock", "horizontalRule", "table", "columns", "callout", "formula", "link"],
 };
 
 export const SLASH_COMMANDS: readonly SlashCommand[] = [
   { id: "heading1", keywords: ["h1", "heading", "title", "标题"] },
   { id: "heading2", keywords: ["h2", "heading", "标题"] },
   { id: "heading3", keywords: ["h3", "heading", "标题"] },
+  { id: "heading4", keywords: ["h4", "heading", "标题"] },
+  { id: "heading5", keywords: ["h5", "heading", "标题"] },
+  { id: "heading6", keywords: ["h6", "heading", "标题"] },
+  { id: "inlineCode", keywords: ["inline", "code", "行内", "代码"] },
+  { id: "image", keywords: ["image", "picture", "photo", "图片"] },
+  { id: "videoFile", keywords: ["video", "file", "attachment", "视频", "文件"] },
   { id: "bulletList", keywords: ["bullet", "ul", "list", "unordered", "列表", "无序"] },
   { id: "orderedList", keywords: ["number", "ol", "list", "ordered", "列表", "有序"] },
   { id: "taskList", keywords: ["todo", "task", "check", "checkbox", "任务"] },
@@ -51,6 +66,9 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
   { id: "codeBlock", keywords: ["code", "pre", "代码"] },
   { id: "horizontalRule", keywords: ["divider", "hr", "line", "分割", "分隔"] },
   { id: "table", keywords: ["table", "grid", "表格"] },
+  { id: "columns", keywords: ["columns", "column", "分栏"] },
+  { id: "callout", keywords: ["callout", "highlight", "高亮", "提示"] },
+  { id: "formula", keywords: ["formula", "math", "equation", "公式"] },
   { id: "link", keywords: ["link", "url", "href", "链接"] },
 ];
 
@@ -121,12 +139,23 @@ export function applySlashCommand(editor: Editor, match: SlashMatch, id: SlashCo
       return chain.setHeading({ level: 2 }).run();
     case "heading3":
       return chain.setHeading({ level: 3 }).run();
+    case "heading4":
+      return chain.setHeading({ level: 4 }).run();
+    case "heading5":
+      return chain.setHeading({ level: 5 }).run();
+    case "heading6":
+      return chain.setHeading({ level: 6 }).run();
+    case "inlineCode":
+      return chain.toggleCode().run();
     case "bulletList":
       return chain.toggleBulletList().run();
     case "orderedList":
       return chain.toggleOrderedList().run();
     case "taskList":
       return chain.toggleTaskList().run();
+    case "image":
+    case "videoFile":
+      return chain.run();
     case "blockquote":
       return chain.toggleBlockquote().run();
     case "codeBlock":
@@ -135,6 +164,18 @@ export function applySlashCommand(editor: Editor, match: SlashMatch, id: SlashCo
       return chain.setHorizontalRule().run();
     case "table":
       return chain.insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+    case "columns":
+      return chain.insertContent({
+        type: "columns",
+        content: [
+          { type: "column", content: [{ type: "paragraph" }] },
+          { type: "column", content: [{ type: "paragraph" }] },
+        ],
+      }).run();
+    case "callout":
+      return chain.insertContent({ type: "callout", attrs: { variant: "info" }, content: [{ type: "paragraph" }] }).run();
+    case "formula":
+      return chain.insertContent({ type: "formula", content: [{ type: "text", text: "x = " }] }).run();
     case "link":
       return chain.run();
   }

@@ -10,7 +10,7 @@ export const membersApi = {
 };
 export const versionsApi = {
   list: (documentId: string, cursor?: string) => apiRequest(`${base(documentId)}/versions?limit=30${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`, VersionPageSchema),
-  create: (documentId: string, label?: string) => apiRequest(`${base(documentId)}/versions`, VersionSchema, { method: "POST", headers: { "Idempotency-Key": crypto.randomUUID() }, body: JSON.stringify({ ...(label ? { label } : {}) }) }),
+  create: (documentId: string, label?: string, stateVector?: string, idempotencyKey = crypto.randomUUID()) => apiRequest(`${base(documentId)}/versions`, VersionSchema, { method: "POST", headers: { "Idempotency-Key": idempotencyKey }, body: JSON.stringify({ ...(label ? { label } : {}), ...(stateVector ? { state_vector: stateVector } : {}) }) }),
   get: (documentId: string, versionId: string) => apiRequest(`${base(documentId)}/versions/${encodeURIComponent(versionId)}`, VersionDetailSchema),
-  restore: (documentId: string, versionId: string, expected_sequence: number) => apiRequest(`${base(documentId)}/versions/${encodeURIComponent(versionId)}/restorations`, VersionSchema, { method: "POST", headers: { "Idempotency-Key": crypto.randomUUID() }, body: JSON.stringify({ expected_sequence }) }),
+  restore: (documentId: string, versionId: string, expected_sequence: number, idempotencyKey = crypto.randomUUID()) => apiRequest(`${base(documentId)}/versions/${encodeURIComponent(versionId)}/restorations`, VersionSchema, { method: "POST", headers: { "Idempotency-Key": idempotencyKey }, body: JSON.stringify({ expected_sequence }) }),
 };

@@ -23,6 +23,7 @@ type EditorCanvasProps = {
   editor: Editor | null;
   locale: string;
   onRequestLink: () => void;
+  onRequestAttachment?: (kind: "image" | "attachment") => void;
 };
 
 // TipTap 3 throws until EditorContent mounts the ProseMirror view.
@@ -52,7 +53,7 @@ function insertControlStyle(editor: Editor): CSSProperties {
   }
 }
 
-export function EditorCanvas({ editor, locale, onRequestLink }: EditorCanvasProps) {
+export function EditorCanvas({ editor, locale, onRequestLink, onRequestAttachment }: EditorCanvasProps) {
 
   const t = getMessages(locale);
   const [slash, setSlash] = useState<SlashMatch | null>(null);
@@ -70,7 +71,9 @@ export function EditorCanvas({ editor, locale, onRequestLink }: EditorCanvasProp
     if (!editor || !slash) return;
     applySlashCommand(editor, slash, id);
     if (id === "link") onRequestLink();
-  }, [editor, slash, onRequestLink]);
+    if (id === "image") onRequestAttachment?.("image");
+    if (id === "videoFile") onRequestAttachment?.("attachment");
+  }, [editor, slash, onRequestLink, onRequestAttachment]);
 
   useEffect(() => {
     if (!editor) return undefined;

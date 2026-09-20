@@ -10,7 +10,7 @@ const connectTimeoutMs = 10_000;
 const reconnectBudgetMs = 60_000;
 const minReconnectDelayMs = 500;
 const maxReconnectDelayMs = 5_000;
-const defaultIdleMs = 32;
+const defaultIdleMs = 0;
 
 export type CollaborationConnection = {
   websocket_url: string;
@@ -96,8 +96,10 @@ export class KnowledgeWebSocketProvider {
     });
   }
 
-  // Pull-only SyncStep1. Publish retry must use flushAndSync so the client can push Step2.
-  // 只拉不推的 SyncStep1。发布重试必须走 flushAndSync，才能把本端 Step2 推上去。
+  // Send a SyncStep1 on the already ordered socket. The actor processes frames in order,
+  // so the SyncStep2 response is a commit barrier for all updates sent before this frame.
+  // 在已有顺序连接上发送 SyncStep1。服务端 actor 按帧顺序处理，因此 SyncStep2
+  // 就是此前所有 update 已提交的屏障。
   resync(): Promise<void> {
     if (this.destroyed || this.terminal) return Promise.reject(new Error("Collaboration is not ready"));
     const socket = this.socket;
@@ -115,24 +117,23 @@ export class KnowledgeWebSocketProvider {
     encoding.writeVarUint(encoder, syncMessage);
     syncProtocol.writeSyncStep1(encoder, this.doc);
     socket.send(encoding.toUint8Array(encoder));
-    return this.whenSynced;
+    return this.withTimeout(this.whenSynced, connectTimeoutMs, "Collaboration sync barrier timed out");
   }
 
-  // Wait until outbound doc updates have been written and the doc is briefly idle.
-  // 等到本端 update 都已写出，并再空闲一小段时间。
+  // Let the current Yjs transaction/update event finish before the barrier frame is sent.
+  // 等当前 Yjs transaction/update 事件完成后再发送屏障帧。
   flushOutbound(): Promise<void> {
     if (this.destroyed || this.terminal) return Promise.reject(new Error("Collaboration is not ready"));
     return this.waitUntilIdle();
   }
 
-  // Drain outbound updates, then reconnect so the server sends SyncStep1 and the client can push Step2.
-  // 先排空本端 update，再重连让服务端发 SyncStep1，客户端才能回 Step2 推上本端时钟。
+  // Drain the local update event, then use the same socket for a bidirectional barrier.
+  // 先排空本端 update 事件，再在同一条连接上完成双向屏障。
   async flushAndSync(): Promise<void> {
     if (this.destroyed || this.terminal) return Promise.reject(new Error("Collaboration is not ready"));
     await this.waitUntilIdle();
     if (this.destroyed || this.terminal) return Promise.reject(new Error("Collaboration is not ready"));
-    this.reconnectForHandshake();
-    await this.whenSynced;
+    await this.resync();
     if (this.destroyed || this.terminal) return Promise.reject(new Error("Collaboration is not ready"));
     await this.waitUntilIdle();
   }
@@ -151,21 +152,6 @@ export class KnowledgeWebSocketProvider {
       let timer = setTimeout(finish, idleMs);
       this.doc.on("update", onUpdate);
     });
-  }
-
-  private reconnectForHandshake() {
-    this.connectGeneration += 1;
-    this.connecting = false;
-    this.resetHandshake();
-    this.clearConnectTimeout();
-    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-    this.reconnectTimer = null;
-    const socket = this.socket;
-    this.socket = null;
-    if (socket && socket.readyState < WebSocket.CLOSING) socket.close(1000, "publish sync reconnect");
-    this.reconnectAttempt = 0;
-    this.reconnectStartedAt = null;
-    void this.connect();
   }
 
   private resetHandshake() {

@@ -13,6 +13,6 @@ export const documentsApi = {
   remove: (id: string, revision: number) => apiRequest(`/api/v1/studio/documents/${encodeURIComponent(id)}`, z.undefined(), { method: "DELETE", headers: { "If-Match": `"${revision}"` } }),
   restore: (id: string) => apiRequest(`/api/v1/studio/trash/${encodeURIComponent(id)}/restore`, DocumentSummarySchema, { method: "POST" }),
   session: (id: string) => apiRequest(`/api/v1/studio/documents/${encodeURIComponent(id)}/collaboration-sessions`, CollaborationSessionSchema, { method: "POST" }),
-  publish: (id: string, revision: number, stateVector: string) => apiRequest(`/api/v1/studio/documents/${encodeURIComponent(id)}/publication`, DocumentSummarySchema, { method: "PUT", headers: { "If-Match": `"${revision}"`, "Idempotency-Key": crypto.randomUUID() }, body: JSON.stringify({ state_vector: stateVector }) }),
+  publish: (id: string, revision: number, stateVector: string, idempotencyKey = crypto.randomUUID()) => apiRequest(`/api/v1/studio/documents/${encodeURIComponent(id)}/publication`, DocumentSummarySchema, { method: "PUT", headers: { "If-Match": `"${revision}"`, "Idempotency-Key": idempotencyKey }, body: JSON.stringify({ state_vector: stateVector }) }),
   unpublish: (id: string, revision: number) => apiRequest(`/api/v1/studio/documents/${encodeURIComponent(id)}/publication`, z.undefined(), { method: "DELETE", headers: { "If-Match": `"${revision}"`, "Idempotency-Key": crypto.randomUUID() } }),
 };

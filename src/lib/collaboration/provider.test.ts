@@ -173,7 +173,7 @@ describe("KnowledgeWebSocketProvider handshake", () => {
     provider.destroy();
   });
 
-  it("does not push local-ahead clocks on pull-only resync, then flushAndSync reconnects with Step2", async () => {
+  it("uses the ordered socket barrier and does not reconnect for publish sync", async () => {
     vi.stubGlobal("WebSocket", FakeWebSocket);
     const serverDoc = new Y.Doc();
     const { provider, socket, doc } = await connectProvider();
@@ -193,21 +193,21 @@ describe("KnowledgeWebSocketProvider handshake", () => {
     expect(resyncTypes).not.toContain(syncProtocol.messageYjsSyncStep2);
     expect(stateVectorHex(doc)).not.toBe(stateVectorHex(serverDoc));
 
+    const beforeBarrier = socket.sent.length;
     const flushed = provider.flushAndSync();
-    await vi.waitFor(() => expect(sockets.length).toBe(2));
-    const next = sockets[1]!;
-    next.open();
-    const beforeReply = next.sent.length;
-    next.incoming(serverStep1(serverDoc));
-    next.incoming(serverStep2(serverDoc));
-    const reconnectTypes = next.sent.slice(beforeReply).flatMap(syncTypes);
-    expect(reconnectTypes).toContain(syncProtocol.messageYjsSyncStep2);
-    for (const payload of next.sent.slice(beforeReply)) {
+    await vi.waitFor(() => expect(socket.sent.length).toBeGreaterThan(beforeBarrier));
+    const barrierPayloads = socket.sent.slice(beforeBarrier);
+    const barrierTypes = barrierPayloads.flatMap(syncTypes);
+    expect(barrierTypes).toContain(syncProtocol.messageYjsSyncStep1);
+    expect(barrierTypes).not.toContain(syncProtocol.messageYjsSyncStep2);
+    for (const payload of socket.sent.slice(0, beforeBarrier)) {
       applyClientPayload(serverDoc, payload);
     }
+    socket.incoming(serverStep2(serverDoc));
     await flushed;
     expect(provider.isSynced).toBe(true);
     expect(stateVectorHex(doc)).toBe(stateVectorHex(serverDoc));
+    expect(sockets).toHaveLength(1);
 
     provider.destroy();
   });

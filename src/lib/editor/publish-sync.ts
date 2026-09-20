@@ -76,8 +76,8 @@ export async function publishAfterSync<T>(input: {
     return await input.publish(input.encodeStateVector());
   } catch (error) {
     if (!isPublishPreconditionFailed(error)) throw error;
-    // Reconnect for a full bidirectional handshake; do not retry with pull-only resync.
-    // 412 后走完整双向握手重连，不再用只拉不推的 resync。
+    // The provider barrier is ordered on the same socket; do not retry against a stale vector.
+    // 屏障在同一条连接上按序完成，不能拿旧 state vector 重试。
     await input.flushAndSync();
     const retryDelayMs = input.retryDelayMs ?? 50;
     if (retryDelayMs > 0) {

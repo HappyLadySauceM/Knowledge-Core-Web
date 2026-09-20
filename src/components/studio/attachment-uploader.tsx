@@ -93,6 +93,29 @@ async function uploadParts(file: File, record: UploadRecord, onProgress: (comple
   await Promise.all([worker(), worker(), worker()]);
 }
 
+// Shared by the media library and the editor slash menu so an inserted node always
+// references an attachment that has completed the resumable upload handshake.
+// 媒体库和编辑器 slash 菜单共用上传流程，确保插入节点只引用已完成分片上传的附件。
+export async function uploadAttachmentFile(
+  file: File,
+  onProgress?: (completed: number, total: number) => void,
+  onResume?: () => void,
+): Promise<MediaAttachment> {
+  const key = fingerprint(file);
+  let record = await readUpload(key);
+  const resumable = record && new Date(record.expires_at).getTime() > Date.now();
+  if (!record || !resumable) record = await createUpload(file);
+  else onResume?.();
+  await saveUpload(record);
+  await uploadParts(file, record, (completed, total) => onProgress?.(completed, total));
+  const parts = record.parts.map((part) => ({ part_number: part.part_number, etag: record?.etags[String(part.part_number)] }));
+  const attachment = await apiFetch<MediaAttachment>(`/api/v1/attachments/${record.attachment.id}/complete`, {
+    method: "POST", body: JSON.stringify({ upload_id: record.upload_id, parts }),
+  });
+  await removeUpload(key);
+  return attachment;
+}
+
 export function AttachmentUploader({ labels, onComplete }: { labels?: Partial<Record<"title" | "hint" | "choose" | "uploading" | "success" | "resume" | "failed", string>>; onComplete?: () => void }) {
   const input = useRef<HTMLInputElement>(null);
   const [state, setState] = useState<"idle" | "uploading" | "success" | "error">("idle");
@@ -100,21 +123,14 @@ export function AttachmentUploader({ labels, onComplete }: { labels?: Partial<Re
   const [message, setMessage] = useState("");
 
   async function start(file: File) {
-    const key = fingerprint(file);
     setState("uploading");
     setMessage("");
     try {
-      let record = await readUpload(key);
-      const resumable = record && new Date(record.expires_at).getTime() > Date.now();
-      if (!record || !resumable) record = await createUpload(file);
-      else setMessage(labels?.resume ?? "Resuming the previous upload…");
-      await saveUpload(record);
-      await uploadParts(file, record, (completed, total) => setProgress(Math.round((completed / total) * 100)));
-      const parts = record.parts.map((part) => ({ part_number: part.part_number, etag: record?.etags[String(part.part_number)] }));
-      const attachment = await apiFetch<MediaAttachment>(`/api/v1/attachments/${record.attachment.id}/complete`, {
-        method: "POST", body: JSON.stringify({ upload_id: record.upload_id, parts }),
-      });
-      await removeUpload(key);
+      const attachment = await uploadAttachmentFile(
+        file,
+        (completed, total) => setProgress(Math.round((completed / total) * 100)),
+        () => setMessage(labels?.resume ?? "Resuming the previous upload…"),
+      );
       setProgress(100);
       setMessage(`${labels?.success ?? "Upload complete"} · ${attachment.status}`);
       setState("success");

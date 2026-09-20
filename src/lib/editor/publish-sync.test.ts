@@ -80,7 +80,7 @@ describe("mapPublishError", () => {
 });
 
 describe("publishAfterSync", () => {
-  it("flushes before encode and retries 412 once after flushAndSync, not pull-only resync", async () => {
+  it("flushes before encode and retries 412 once after the collaboration barrier", async () => {
     const wait = vi.fn().mockResolvedValue(undefined);
     const flush = vi.fn().mockResolvedValue(undefined);
     const encodeStateVector = vi.fn().mockReturnValueOnce("sv-1").mockReturnValueOnce("sv-2");

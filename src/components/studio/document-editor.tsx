@@ -1,18 +1,19 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEditor } from "@tiptap/react";
 import { IndexeddbPersistence } from "y-indexeddb";
 import * as Y from "yjs";
-import { ChevronDown, History, MoreHorizontal, Settings, Share2, Trash2 } from "lucide-react";
+import { ChevronDown, History, Maximize2, MoreHorizontal, Settings, Share2, Trash2, X } from "lucide-react";
 import { EditorCanvas } from "@/components/studio/editor-canvas";
 import { AppDialog } from "@/components/ui/dialog";
 import { documentsApi } from "@/lib/api/documents";
 import { foldersApi } from "@/lib/api/folders";
 import { membersApi, versionsApi } from "@/lib/api/collaboration";
 import { KnowledgeWebSocketProvider, type CollaborationStatus } from "@/lib/collaboration/provider";
+import { uploadAttachmentFile } from "@/components/studio/attachment-uploader";
 import { mapPublishError, publishAfterSync, waitForPublishReady } from "@/lib/editor/publish-sync";
 import { normalizeLinkHref } from "@/lib/editor/selection-toolbar";
 import { encodeRawUrlBase64 } from "@/lib/editor/state-vector";
@@ -21,6 +22,7 @@ import { getMessages } from "@/lib/i18n";
 
 type EditorMenu = "share" | "more" | null;
 type EditorMode = "edit" | "read";
+type EditorWidth = "comfortable" | "wide";
 
 function collaborationLabel(
   status: CollaborationStatus,
@@ -51,6 +53,8 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
   const [panel, setPanel] = useState<"settings" | "versions" | null>(null);
   const [menu, setMenu] = useState<EditorMenu>(null);
   const [modePreference, setModePreference] = useState<EditorMode>("edit");
+  const [editorWidth, setEditorWidth] = useState<EditorWidth>("comfortable");
+  const [editorWidthLoaded, setEditorWidthLoaded] = useState(false);
   const [titleOverride, setTitleOverride] = useState<string | null>(null);
   const [dialog, setDialog] = useState<
     | { kind: "delete-document" }
@@ -63,6 +67,9 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
   >(null);
   const [dialogPending, setDialogPending] = useState(false);
   const linkRangeRef = useRef<{ from: number; to: number } | null>(null);
+  const attachmentInputRef = useRef<HTMLInputElement | null>(null);
+  const attachmentKindRef = useRef<"image" | "attachment">("attachment");
+  const attachmentPositionRef = useRef<number | null>(null);
   const persistenceRef = useRef<{ whenSynced: Promise<unknown> } | null>(null);
   const headerRef = useRef<HTMLElement | null>(null);
   const documentQuery = useQuery({
@@ -95,6 +102,20 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
     ),
     editorProps: { attributes: { class: "document-editor-content" } },
   }, [doc, provider]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      try {
+        const saved = window.localStorage.getItem("knowledge-core:editor-width");
+        if (saved === "wide" || saved === "comfortable") setEditorWidth(saved);
+      } catch {
+        // Layout preference is best-effort.
+      } finally {
+        setEditorWidthLoaded(true);
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -149,7 +170,7 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
   }, [documentId, sessionEpoch, t.editor]);
 
   const canEdit = documentQuery.data?.access === "owner" || documentQuery.data?.access === "editor";
-  const writing = canEdit && modePreference === "edit";
+  const writing = canEdit && modePreference === "edit" && !publishing;
   const remoteTitle = documentQuery.data?.title ?? "";
   const titleDraft = titleOverride ?? remoteTitle;
 
@@ -158,13 +179,25 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
   }, [editor, writing]);
 
   useEffect(() => {
-    if (!menu) return undefined;
+    if (!editorWidthLoaded) return;
+    try {
+      window.localStorage.setItem("knowledge-core:editor-width", editorWidth);
+    } catch {
+      // Storage can be unavailable in privacy mode.
+    }
+  }, [editorWidth, editorWidthLoaded]);
+
+  useEffect(() => {
+    if (!menu && !panel) return undefined;
     const onPointer = (event: MouseEvent) => {
-      if (!headerRef.current?.contains(event.target as Node)) setMenu(null);
+      if (!headerRef.current?.contains(event.target as Node)) {
+        setMenu(null);
+        setPanel(null);
+      }
     };
     document.addEventListener("mousedown", onPointer);
     return () => document.removeEventListener("mousedown", onPointer);
-  }, [menu]);
+  }, [menu, panel]);
 
   async function publish() {
     if (publishing) return;
@@ -172,17 +205,18 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
     setError("");
     try {
       if (!metadataRevision) throw new Error("metadata");
+      const idempotencyKey = crypto.randomUUID();
       const result = await publishAfterSync({
         wait: () => waitForPublishReady({
           persistenceSynced: persistenceRef.current?.whenSynced ?? Promise.reject(new Error("Collaboration is not ready")),
           provider,
         }),
-        flush: () => provider?.flushOutbound() ?? Promise.reject(new Error("Collaboration is not ready")),
+        flush: () => provider?.flushAndSync() ?? Promise.reject(new Error("Collaboration is not ready")),
         encodeStateVector: () => {
           if (!doc) throw new Error("Collaboration is not ready");
           return encodeRawUrlBase64(Y.encodeStateVector(doc));
         },
-        publish: (stateVector) => documentsApi.publish(documentId, metadataRevision, stateVector).then((value) => value.data),
+        publish: (stateVector) => documentsApi.publish(documentId, metadataRevision, stateVector, idempotencyKey).then((value) => value.data),
         flushAndSync: () => provider?.flushAndSync() ?? Promise.reject(new Error("Collaboration is not ready")),
       });
       queryClient.setQueryData(["document", documentId], result);
@@ -274,6 +308,34 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
     setDialog({ kind: "set-link", href: String(editor.getAttributes("link").href ?? "") });
   }
 
+  function requestAttachment(kind: "image" | "attachment") {
+    if (!writing) return;
+    attachmentKindRef.current = kind;
+    attachmentPositionRef.current = editor?.state.selection.from ?? null;
+    attachmentInputRef.current?.click();
+  }
+
+  async function insertAttachment(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.currentTarget.value = "";
+    if (!file || !editor) return;
+    setError("");
+    try {
+      const attachment = await uploadAttachmentFile(file);
+      const kind = attachmentKindRef.current;
+      const position = attachmentPositionRef.current;
+      attachmentPositionRef.current = null;
+      const chain = editor.chain().focus();
+      if (position !== null) chain.setTextSelection(position);
+      chain.insertContent({
+        type: kind === "image" ? "image" : "attachment",
+        attrs: { attachmentId: attachment.id, ...(kind === "image" ? { alt: file.name } : { title: file.name }) },
+      }).run();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : t.editor.attachmentUploadFailed);
+    }
+  }
+
   // Confirm member/version/trash actions through AppDialog; cancel must not hit Gateway.
   // 成员/版本/删除走 AppDialog 确认；取消时不得调用 Gateway。
   async function confirmDialog(value: string) {
@@ -305,12 +367,29 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
         await members.refetch();
       }
       if (dialog.kind === "create-version") {
-        await versionsApi.create(documentId, value || undefined);
+        await waitForPublishReady({
+          persistenceSynced: persistenceRef.current?.whenSynced ?? Promise.reject(new Error("Collaboration is not ready")),
+          provider,
+        });
+        await provider?.flushAndSync();
+        if (!doc) throw new Error("Collaboration is not ready");
+        await versionsApi.create(
+          documentId,
+          value || undefined,
+          encodeRawUrlBase64(Y.encodeStateVector(doc)),
+          crypto.randomUUID(),
+        );
         await versions.refetch();
       }
       if (dialog.kind === "restore-version") {
-        const expectedSequence = versions.data?.items[0]?.sequence ?? dialog.sequence;
-        await versionsApi.restore(documentId, dialog.versionId, expectedSequence);
+        await waitForPublishReady({
+          persistenceSynced: persistenceRef.current?.whenSynced ?? Promise.reject(new Error("Collaboration is not ready")),
+          provider,
+        });
+        await provider?.flushAndSync();
+        const refreshed = await versions.refetch();
+        const expectedSequence = refreshed.data?.head_sequence ?? dialog.sequence;
+        await versionsApi.restore(documentId, dialog.versionId, expectedSequence, crypto.randomUUID());
         window.location.reload();
         return;
       }
@@ -393,8 +472,8 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
             </select>
             <ChevronDown size={14} aria-hidden="true" />
           </label>
-          <div className="editor-popover-wrap">
-            <button type="button" aria-label={t.editor.more} aria-expanded={menu === "more"} onClick={() => setMenu(menu === "more" ? null : "more")}>
+          <div className="editor-popover-wrap editor-panel-anchor">
+            <button type="button" aria-label={t.editor.more} aria-expanded={menu === "more"} onClick={() => { setPanel(null); setMenu(menu === "more" ? null : "more"); }}>
               <MoreHorizontal size={16} />
             </button>
             {menu === "more" ? (
@@ -407,6 +486,54 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
                   <History size={14} />
                   {t.studio.versionHistory}
                 </button>
+              </div>
+            ) : null}
+            {panel ? (
+              <div className="editor-popover editor-panel editor-floating-panel" role="region" aria-label={panel === "settings" ? t.studio.documentSettings : t.studio.versionHistory}>
+                <div className="editor-panel-head">
+                  <h2>{panel === "settings" ? t.studio.documentSettings : t.studio.versionHistory}</h2>
+                  <button type="button" className="editor-panel-close" aria-label={t.editor.closePanel} onClick={() => setPanel(null)}><X size={15} /></button>
+                </div>
+                {panel === "settings" && documentQuery.data ? (
+                  <form onSubmit={saveMetadata}>
+                    <label>{t.studio.summary}<textarea name="summary" defaultValue={documentQuery.data.summary} maxLength={1000} /></label>
+                    <label>{t.studio.slug}<input name="slug" defaultValue={documentQuery.data.slug} /></label>
+                    <label>{t.studio.language}<input name="language" defaultValue={documentQuery.data.language} /></label>
+                    <label>{t.studio.tags}<input name="tags" defaultValue={documentQuery.data.tags?.join(", ")} /></label>
+                    <label>{t.studio.folder}
+                      <select name="folder_id" defaultValue={documentQuery.data.folder_id}>
+                        <option value="">{t.studio.noFolder}</option>
+                        {folders.data?.map((folder) => <option value={folder.id} key={folder.id}>{folder.name}</option>)}
+                      </select>
+                    </label>
+                    <div className="editor-width-control">
+                      <span>{t.editor.editorWidth}</span>
+                      <div role="group" aria-label={t.editor.editorWidth}>
+                        <button type="button" className={editorWidth === "comfortable" ? "is-selected" : ""} onClick={() => setEditorWidth("comfortable")}><Maximize2 size={14} />{t.editor.widthComfortable}</button>
+                        <button type="button" className={editorWidth === "wide" ? "is-selected" : ""} onClick={() => setEditorWidth("wide")}><Maximize2 size={14} />{t.editor.widthWide}</button>
+                      </div>
+                    </div>
+                    <button type="submit">{t.studio.saveMetadata}</button>
+                    <button className="danger-button" type="button" onClick={() => setDialog({ kind: "delete-document" })}>
+                      <Trash2 size={14} />
+                      {t.studio.deleteDocument}
+                    </button>
+                  </form>
+                ) : null}
+                {panel === "versions" ? (
+                  <div>
+                    <div className="editor-panel-subhead"><span>{t.studio.versionHistory}</span>{canEdit ? <button type="button" onClick={() => setDialog({ kind: "create-version" })}>{t.studio.createVersion}</button> : null}</div>
+                    {versions.data?.items.map((version) => (
+                      <article className="panel-row" key={version.id}>
+                        <div>
+                          <strong>{version.label || version.kind}</strong>
+                          <span>#{version.sequence} · {new Date(version.created_at).toLocaleString(locale)}</span>
+                        </div>
+                        {canEdit ? <button type="button" onClick={() => setDialog({ kind: "restore-version", versionId: version.id, sequence: version.sequence })}>{t.studio.restore}</button> : null}
+                      </article>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </div>
@@ -427,7 +554,7 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
       <div className="editor-layout">
         <section className="document-editor-shell">
           {visibleError ? <p className="form-error">{visibleError}</p> : null}
-          <div className="document-editor-writing">
+          <div className={`document-editor-writing editor-width-${editorWidth}`}>
             <input
               className="document-editor-title"
               value={titleDraft}
@@ -440,49 +567,11 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
             />
             <p className="document-editor-byline">{byline}</p>
             <div className="document-editor-comment-gutter" aria-hidden="true" />
-            <EditorCanvas editor={editor} locale={locale} onRequestLink={requestLink} />
+            <EditorCanvas editor={editor} locale={locale} onRequestLink={requestLink} onRequestAttachment={requestAttachment} />
           </div>
         </section>
-        {panel ? (
-          <aside className="editor-panel">
-            {panel === "settings" && documentQuery.data ? (
-              <form onSubmit={saveMetadata}>
-                <h2>{t.studio.documentSettings}</h2>
-                <label>{t.studio.summary}<textarea name="summary" defaultValue={documentQuery.data.summary} maxLength={1000} /></label>
-                <label>{t.studio.slug}<input name="slug" defaultValue={documentQuery.data.slug} /></label>
-                <label>{t.studio.language}<input name="language" defaultValue={documentQuery.data.language} /></label>
-                <label>{t.studio.tags}<input name="tags" defaultValue={documentQuery.data.tags?.join(", ")} /></label>
-                <label>{t.studio.folder}
-                  <select name="folder_id" defaultValue={documentQuery.data.folder_id}>
-                    <option value="">{t.studio.noFolder}</option>
-                    {folders.data?.map((folder) => <option value={folder.id} key={folder.id}>{folder.name}</option>)}
-                  </select>
-                </label>
-                <button type="submit">{t.studio.saveMetadata}</button>
-                <button className="danger-button" type="button" onClick={() => setDialog({ kind: "delete-document" })}>
-                  <Trash2 size={14} />
-                  {t.studio.deleteDocument}
-                </button>
-              </form>
-            ) : null}
-            {panel === "versions" ? (
-              <div>
-                <h2>{t.studio.versionHistory}</h2>
-                {canEdit ? <button type="button" onClick={() => setDialog({ kind: "create-version" })}>{t.studio.createVersion}</button> : null}
-                {versions.data?.items.map((version) => (
-                  <article className="panel-row" key={version.id}>
-                    <div>
-                      <strong>{version.label || version.kind}</strong>
-                      <span>#{version.sequence} · {new Date(version.created_at).toLocaleString(locale)}</span>
-                    </div>
-                    {canEdit ? <button type="button" onClick={() => setDialog({ kind: "restore-version", versionId: version.id, sequence: version.sequence })}>{t.studio.restore}</button> : null}
-                  </article>
-                ))}
-              </div>
-            ) : null}
-          </aside>
-        ) : null}
       </div>
+      <input ref={attachmentInputRef} type="file" hidden accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip" onChange={(event) => void insertAttachment(event)} />
       <AppDialog
         key={dialog?.kind === "remove-member" ? `remove-${dialog.userId}` : dialog?.kind === "restore-version" ? `restore-${dialog.versionId}` : dialog?.kind === "set-link" ? "set-link" : dialog?.kind}
         open={Boolean(dialog)}

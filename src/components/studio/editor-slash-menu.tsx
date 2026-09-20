@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { Code, Code2, Columns3, Heading1, Heading2, Heading3, Heading4, Heading5, Heading6, Image, Link2, List, ListChecks, ListOrdered, MessageSquareQuote, Minus, Paperclip, Quote, Sigma, Table2, type LucideIcon } from "lucide-react";
 import type { SlashCommand, SlashCommandGroup } from "@/lib/editor/slash-commands";
 import { groupSlashCommands } from "@/lib/editor/slash-commands";
 import type { getMessages } from "@/lib/i18n";
@@ -21,6 +22,29 @@ function commandLabel(id: SlashCommand["id"], labels: EditorCopy): string {
 function groupLabel(id: SlashCommandGroup["id"], labels: EditorCopy): string {
   return id === "basic" ? labels.slashBasic : labels.slashCommon;
 }
+
+const commandIcons: Record<SlashCommand["id"], LucideIcon> = {
+  heading1: Heading1,
+  heading2: Heading2,
+  heading3: Heading3,
+  heading4: Heading4,
+  heading5: Heading5,
+  heading6: Heading6,
+  inlineCode: Code2,
+  image: Image,
+  videoFile: Paperclip,
+  bulletList: List,
+  orderedList: ListOrdered,
+  taskList: ListChecks,
+  blockquote: Quote,
+  codeBlock: Code,
+  horizontalRule: Minus,
+  table: Table2,
+  columns: Columns3,
+  callout: MessageSquareQuote,
+  formula: Sigma,
+  link: Link2,
+};
 
 export function EditorSlashMenu({
   items,
@@ -48,6 +72,7 @@ export function EditorSlashMenu({
             {group.items.map((item) => {
               optionIndex += 1;
               const index = optionIndex;
+              const Icon = commandIcons[item.id];
               return (
                 <div
                   key={item.id}
@@ -63,7 +88,8 @@ export function EditorSlashMenu({
                     onSelect(item.id);
                   }}
                 >
-                  {commandLabel(item.id, labels)}
+                  <Icon size={15} aria-hidden="true" />
+                  <span>{commandLabel(item.id, labels)}</span>
                 </div>
               );
             })}

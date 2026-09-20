@@ -8,6 +8,7 @@ import TextAlign from "@tiptap/extension-text-align";
 import Underline from "@tiptap/extension-underline";
 import StarterKit from "@tiptap/starter-kit";
 import type * as Y from "yjs";
+import { StudioAttachment, StudioCallout, StudioColumn, StudioColumns, StudioFormula, StudioImage } from "@/lib/editor/rich-blocks";
 
 type CollaborationCaretUser = { name: string; color: string };
 
@@ -30,6 +31,12 @@ export function createStudioDocumentExtensions(options?: {
     TaskList,
     TaskItem.configure({ nested: true }),
     TableKit.configure({ table: { resizable: false } }),
+    StudioImage,
+    StudioAttachment,
+    StudioCallout,
+    StudioColumns,
+    StudioColumn,
+    StudioFormula,
   ];
   if (options?.collaboration) {
     extensions.push(Collaboration.configure(options.collaboration));

@@ -58,15 +58,24 @@ describe("groupSlashCommands", () => {
       "heading1",
       "heading2",
       "heading3",
+      "heading4",
+      "heading5",
+      "heading6",
+      "inlineCode",
       "bulletList",
       "orderedList",
       "taskList",
     ]);
     expect(groups[1]?.items.map((item) => item.id)).toEqual([
+      "image",
+      "videoFile",
       "blockquote",
       "codeBlock",
       "horizontalRule",
       "table",
+      "columns",
+      "callout",
+      "formula",
       "link",
     ]);
   });
@@ -134,6 +143,20 @@ describe("slash command apply", () => {
     const match = matchSlashInEditor(editor);
     expect(applySlashCommand(editor, match!, "table")).toBe(true);
     expect(editor.isActive("table")).toBe(true);
+  });
+
+  it("inserts the creative block formats supported by the collaboration schema", () => {
+    const editor = createEditor();
+    editor.commands.insertContent("/");
+    const match = matchSlashInEditor(editor);
+    expect(applySlashCommand(editor, match!, "columns")).toBe(true);
+    expect(editor.getJSON().content?.[0]?.type).toBe("columns");
+
+    editor.commands.setContent("<p>/</p>");
+    editor.commands.setTextSelection(2);
+    const calloutMatch = matchSlashInEditor(editor);
+    expect(applySlashCommand(editor, calloutMatch!, "callout")).toBe(true);
+    expect(editor.getJSON().content?.[0]?.type).toBe("callout");
   });
 
   it("clears the slash query for a link command", () => {

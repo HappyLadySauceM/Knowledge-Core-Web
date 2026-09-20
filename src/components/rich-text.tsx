@@ -1,5 +1,6 @@
 /* eslint-disable @next/next/no-img-element -- attachment URLs are short-lived redirects and cannot use the static Next image loader. */
 import type { RichTextNode } from "@/lib/api/types";
+import type { ElementType } from "react";
 
 function safeHref(value: unknown) {
   if (typeof value !== "string") return undefined;
@@ -15,11 +16,17 @@ function renderNode(node: RichTextNode, index: number): React.ReactNode {
     if (mark.type === "link") { const href = safeHref(mark.attrs?.href); return href ? <a key={`${index}-link`} href={href} target="_blank" rel="noreferrer">{value}</a> : value; }
     if (mark.type === "bold") return <strong key={`${index}-bold`}>{value}</strong>;
     if (mark.type === "italic") return <em key={`${index}-italic`}>{value}</em>;
+    if (mark.type === "strike") return <s key={`${index}-strike`}>{value}</s>;
+    if (mark.type === "underline") return <u key={`${index}-underline`}>{value}</u>;
     if (mark.type === "code") return <code key={`${index}-code`}>{value}</code>;
     return value;
   }, text);
   const key = `${node.type}-${index}`;
-  if (node.type === "heading") return node.attrs?.level === 1 ? <h1 key={key}>{text}</h1> : <h2 key={key}>{text}</h2>;
+  if (node.type === "heading") {
+    const level = Math.min(6, Math.max(1, Number(node.attrs?.level ?? 1)));
+    const Heading = `h${level}` as ElementType;
+    return <Heading key={key}>{text}</Heading>;
+  }
   if (node.type === "blockquote") return <blockquote key={key}>{text}</blockquote>;
   if (node.type === "codeBlock") return <pre key={key}><code>{text}</code></pre>;
   if (node.type === "bulletList" || node.type === "taskList") return <ul key={key}>{children}</ul>;
@@ -32,6 +39,19 @@ function renderNode(node: RichTextNode, index: number): React.ReactNode {
     const src = attachmentId ? `/api/bff/gateway/api/v1/attachments/${encodeURIComponent(attachmentId)}/content` : undefined;
     return src ? <img key={key} src={src} alt={typeof attrs.alt === "string" ? attrs.alt : ""} loading="lazy" /> : null;
   }
+  if (node.type === "attachment") {
+    const attachmentId = typeof attrs.attachmentId === "string" ? attrs.attachmentId : undefined;
+    const href = attachmentId ? `/api/bff/gateway/api/v1/attachments/${encodeURIComponent(attachmentId)}/content` : undefined;
+    return href ? <a key={key} className="rich-text-attachment" href={href} target="_blank" rel="noreferrer">{typeof attrs.title === "string" ? attrs.title : "Attachment"}</a> : null;
+  }
+  if (node.type === "callout") return <aside key={key} className={`rich-text-callout ${typeof attrs.variant === "string" ? attrs.variant : "info"}`}>{children}</aside>;
+  if (node.type === "columns") return <div key={key} className="rich-text-columns">{children}</div>;
+  if (node.type === "column") return <div key={key} className="rich-text-column">{children}</div>;
+  if (node.type === "formula") return <div key={key} className="rich-text-formula" role="math">{text}</div>;
+  if (node.type === "table") return <table key={key}><tbody>{children}</tbody></table>;
+  if (node.type === "tableRow") return <tr key={key}>{children}</tr>;
+  if (node.type === "tableHeader") return <th key={key}>{text}</th>;
+  if (node.type === "tableCell") return <td key={key}>{text}</td>;
   return <p key={key}>{text}</p>;
 }
 
