@@ -211,4 +211,24 @@ describe("KnowledgeWebSocketProvider handshake", () => {
 
     provider.destroy();
   });
+
+  it("closes the socket when the server sends an unsupported protocol frame", async () => {
+    vi.stubGlobal("WebSocket", FakeWebSocket);
+    const onTerminal = vi.fn();
+    const provider = new KnowledgeWebSocketProvider(
+      async () => ({
+        websocket_url: "ws://collaboration.test/v1/documents/doc",
+        ticket: "ticket",
+        subprotocol: "y-sync",
+      }),
+      new Y.Doc(),
+      { onTerminal },
+    );
+    await vi.waitFor(() => expect(sockets.length).toBeGreaterThan(0));
+    const socket = sockets[sockets.length - 1]!;
+    socket.open();
+    socket.incoming(new Uint8Array([99]));
+    await vi.waitFor(() => expect(onTerminal).toHaveBeenCalledWith(4400));
+    provider.destroy();
+  });
 });

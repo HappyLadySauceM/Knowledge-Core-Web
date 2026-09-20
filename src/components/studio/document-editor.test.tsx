@@ -205,13 +205,21 @@ describe("DocumentEditor chrome", () => {
     expect(membersApi.remove).not.toHaveBeenCalled();
   });
 
-  it("does not create a version when the label dialog is cancelled", async () => {
+  it("only exposes the automatic recovery point", async () => {
     renderEditor();
     await openMoreItem("Version history");
-    fireEvent.click(await screen.findByRole("button", { name: "Create version" }));
-    expect(screen.getByRole("dialog")).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("button", { name: "Create version" })).toBeNull();
+    expect(screen.getByText("Automatic recovery only")).toBeVisible();
     expect(versionsApi.create).not.toHaveBeenCalled();
+  });
+
+  it("treats Ctrl+S as a throttled automatic-save reminder", async () => {
+    renderEditor();
+    expect(await screen.findByRole("button", { name: "Share" })).toBeVisible();
+    fireEvent.keyDown(window, { key: "s", ctrlKey: true });
+    expect(screen.getByText("Already saved automatically — no manual save needed")).toBeVisible();
+    fireEvent.keyDown(window, { key: "s", ctrlKey: true });
+    expect(screen.getAllByText("Already saved automatically — no manual save needed")).toHaveLength(1);
   });
 
   it("does not restore a version when the confirm dialog is cancelled", async () => {

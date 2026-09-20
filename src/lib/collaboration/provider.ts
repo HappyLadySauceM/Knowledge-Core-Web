@@ -305,31 +305,43 @@ export class KnowledgeWebSocketProvider {
 
   private receive(data: ArrayBuffer | Blob, socket: WebSocket) {
     if (data instanceof Blob) {
-      void data.arrayBuffer().then((value) => this.receive(value, socket));
+      void data.arrayBuffer()
+        .then((value) => this.receive(value, socket))
+        .catch(() => this.rejectProtocol(socket));
       return;
     }
     if (this.socket !== socket) return;
-    const decoder = decoding.createDecoder(new Uint8Array(data));
-    while (decoding.hasContent(decoder)) {
-      const type = decoding.readVarUint(decoder);
-      if (type === syncMessage) {
-        const encoder = encoding.createEncoder();
-        encoding.writeVarUint(encoder, syncMessage);
-        const syncType = syncProtocol.readSyncMessage(decoder, encoder, this.doc, this);
-        if (syncType === syncProtocol.messageYjsSyncStep2) this.handshakeRemote = true;
-        if (syncType === syncProtocol.messageYjsSyncStep1) this.handshakeLocal = true;
-        if (encoding.length(encoder) > 1 && this.socket === socket && socket.readyState === WebSocket.OPEN) {
-          socket.send(encoding.toUint8Array(encoder));
+    try {
+      const decoder = decoding.createDecoder(new Uint8Array(data));
+      while (decoding.hasContent(decoder)) {
+        const type = decoding.readVarUint(decoder);
+        if (type === syncMessage) {
+          const encoder = encoding.createEncoder();
+          encoding.writeVarUint(encoder, syncMessage);
+          const syncType = syncProtocol.readSyncMessage(decoder, encoder, this.doc, this);
+          if (syncType === syncProtocol.messageYjsSyncStep2) this.handshakeRemote = true;
+          if (syncType === syncProtocol.messageYjsSyncStep1) this.handshakeLocal = true;
+          if (encoding.length(encoder) > 1 && this.socket === socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(encoding.toUint8Array(encoder));
+          }
+          continue;
         }
-        continue;
+        if (type === awarenessMessage) {
+          awarenessProtocol.applyAwarenessUpdate(this.awareness, decoding.readVarUint8Array(decoder), this);
+          continue;
+        }
+        this.rejectProtocol(socket);
+        return;
       }
-      if (type === awarenessMessage) {
-        awarenessProtocol.applyAwarenessUpdate(this.awareness, decoding.readVarUint8Array(decoder), this);
-        continue;
-      }
-      break;
+      this.completeHandshake();
+    } catch {
+      this.rejectProtocol(socket);
     }
-    this.completeHandshake();
+  }
+
+  private rejectProtocol(socket: WebSocket) {
+    if (this.socket !== socket || socket.readyState >= WebSocket.CLOSING) return;
+    socket.close(4400, "invalid-protocol");
   }
 
   private sendUpdate(update: Uint8Array) {

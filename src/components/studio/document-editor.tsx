@@ -50,6 +50,7 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
   const [status, setStatus] = useState<CollaborationStatus>("connecting");
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState("");
+  const [autosaveNotice, setAutosaveNotice] = useState("");
   const [panel, setPanel] = useState<"settings" | "versions" | null>(null);
   const [menu, setMenu] = useState<EditorMenu>(null);
   const [modePreference, setModePreference] = useState<EditorMode>("edit");
@@ -60,7 +61,6 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
     | { kind: "delete-document" }
     | { kind: "add-member" }
     | { kind: "remove-member"; userId: string; revision: number; name: string }
-    | { kind: "create-version" }
     | { kind: "restore-version"; versionId: string; sequence: number }
     | { kind: "set-link"; href: string }
     | null
@@ -70,6 +70,7 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
   const attachmentInputRef = useRef<HTMLInputElement | null>(null);
   const attachmentKindRef = useRef<"image" | "attachment">("attachment");
   const attachmentPositionRef = useRef<number | null>(null);
+  const lastAutosaveReminderRef = useRef(0);
   const persistenceRef = useRef<{ whenSynced: Promise<unknown> } | null>(null);
   const headerRef = useRef<HTMLElement | null>(null);
   const documentQuery = useQuery({
@@ -177,6 +178,21 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
   useEffect(() => {
     editor?.setEditable(writing);
   }, [editor, writing]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "s") return;
+      event.preventDefault();
+      event.stopPropagation();
+      const now = Date.now();
+      if (now - lastAutosaveReminderRef.current < 30_000) return;
+      lastAutosaveReminderRef.current = now;
+      setAutosaveNotice(t.editor.autosaveReminder);
+      window.setTimeout(() => setAutosaveNotice(""), 2_400);
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [t.editor.autosaveReminder]);
 
   useEffect(() => {
     if (!editorWidthLoaded) return;
@@ -366,21 +382,6 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
         await membersApi.remove(documentId, dialog.userId, dialog.revision);
         await members.refetch();
       }
-      if (dialog.kind === "create-version") {
-        await waitForPublishReady({
-          persistenceSynced: persistenceRef.current?.whenSynced ?? Promise.reject(new Error("Collaboration is not ready")),
-          provider,
-        });
-        await provider?.flushAndSync();
-        if (!doc) throw new Error("Collaboration is not ready");
-        await versionsApi.create(
-          documentId,
-          value || undefined,
-          encodeRawUrlBase64(Y.encodeStateVector(doc)),
-          crypto.randomUUID(),
-        );
-        await versions.refetch();
-      }
       if (dialog.kind === "restore-version") {
         await waitForPublishReady({
           persistenceSynced: persistenceRef.current?.whenSynced ?? Promise.reject(new Error("Collaboration is not ready")),
@@ -522,7 +523,7 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
                 ) : null}
                 {panel === "versions" ? (
                   <div>
-                    <div className="editor-panel-subhead"><span>{t.studio.versionHistory}</span>{canEdit ? <button type="button" onClick={() => setDialog({ kind: "create-version" })}>{t.studio.createVersion}</button> : null}</div>
+                    <div className="editor-panel-subhead"><span>{t.studio.versionHistory}</span><span className="editor-panel-note">{t.editor.autosaveOnly}</span></div>
                     {versions.data?.items.map((version) => (
                       <article className="panel-row" key={version.id}>
                         <div>
@@ -532,6 +533,7 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
                         {canEdit ? <button type="button" onClick={() => setDialog({ kind: "restore-version", versionId: version.id, sequence: version.sequence })}>{t.studio.restore}</button> : null}
                       </article>
                     ))}
+                    {versions.data?.items.length === 0 ? <p className="editor-panel-note">{t.editor.autosavePending}</p> : null}
                   </div>
                 ) : null}
               </div>
@@ -571,16 +573,17 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
           </div>
         </section>
       </div>
+      {autosaveNotice ? <div className="editor-autosave-toast" role="status" aria-live="polite">{autosaveNotice}</div> : null}
       <input ref={attachmentInputRef} type="file" hidden accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip" onChange={(event) => void insertAttachment(event)} />
       <AppDialog
         key={dialog?.kind === "remove-member" ? `remove-${dialog.userId}` : dialog?.kind === "restore-version" ? `restore-${dialog.versionId}` : dialog?.kind === "set-link" ? "set-link" : dialog?.kind}
         open={Boolean(dialog)}
-        title={dialog?.kind === "add-member" ? t.studio.addMember : dialog?.kind === "remove-member" ? t.studio.removeMember : dialog?.kind === "create-version" ? t.studio.createVersion : dialog?.kind === "restore-version" ? t.studio.restoreVersion : dialog?.kind === "set-link" ? t.editor.linkTitle : t.studio.deleteDocument}
+        title={dialog?.kind === "add-member" ? t.studio.addMember : dialog?.kind === "remove-member" ? t.studio.removeMember : dialog?.kind === "restore-version" ? t.studio.restoreVersion : dialog?.kind === "set-link" ? t.editor.linkTitle : t.studio.deleteDocument}
         description={dialog?.kind === "remove-member" ? t.studio.removeMemberBody.replace("{name}", dialog.name) : dialog?.kind === "restore-version" ? t.studio.restoreVersionBody : dialog?.kind === "delete-document" ? t.studio.deleteDocumentBody.replace("{name}", documentQuery.data?.title ?? "") : undefined}
-        inputLabel={dialog?.kind === "add-member" ? t.studio.memberUsername : dialog?.kind === "create-version" ? t.studio.versionLabel : dialog?.kind === "set-link" ? t.editor.linkUrl : undefined}
+        inputLabel={dialog?.kind === "add-member" ? t.studio.memberUsername : dialog?.kind === "set-link" ? t.editor.linkUrl : undefined}
         inputDefault={dialog?.kind === "set-link" ? dialog.href : undefined}
         inputRequired={dialog?.kind === "add-member" || dialog?.kind === "set-link"}
-        confirmLabel={dialogPending ? t.common.working : dialog?.kind === "create-version" || dialog?.kind === "add-member" ? t.common.create : dialog?.kind === "restore-version" ? t.studio.restore : dialog?.kind === "set-link" ? t.editor.linkApply : t.common.confirm}
+        confirmLabel={dialogPending ? t.common.working : dialog?.kind === "add-member" ? t.common.create : dialog?.kind === "restore-version" ? t.studio.restore : dialog?.kind === "set-link" ? t.editor.linkApply : t.common.confirm}
         cancelLabel={t.common.cancel}
         pending={dialogPending}
         onClose={closeDialog}
