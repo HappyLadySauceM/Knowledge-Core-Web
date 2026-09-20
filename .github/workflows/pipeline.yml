@@ -393,7 +393,18 @@ jobs:
       - name: Mark dev deployment pending
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
-        run: ci-templates status --config "$CI_PROJECT_CONFIG" --sha "$GITHUB_SHA" --state pending --description "Knowledge Core Web deployment started" --target-url "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4; do
+            if ci-templates status --config "$CI_PROJECT_CONFIG" --sha "$GITHUB_SHA" --state pending --description "Knowledge Core Web deployment started" --target-url "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"; then
+              exit 0
+            fi
+            echo "::warning::Unable to publish the pending deployment status (attempt ${attempt}/4)"
+            if [[ "$attempt" -lt 4 ]]; then
+              sleep "$((attempt * 2))"
+            fi
+          done
+          echo "::warning::Deployment status reporting is unavailable; continuing with Argo and smoke verification"
       - name: Wait for Argo CD
         run: ci-templates argo-wait --config "$CI_PROJECT_CONFIG" --revision "${{ steps.gitops.outputs.gitops_revision }}" --services "${{ needs.plan.outputs.release_services }}"
       - name: Run configured post-deploy smoke
@@ -408,7 +419,18 @@ jobs:
       - name: Mark dev smoke successful
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
-        run: ci-templates status --config "$CI_PROJECT_CONFIG" --sha "$GITHUB_SHA" --state success --description "Knowledge Core Web smoke passed" --target-url "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4; do
+            if ci-templates status --config "$CI_PROJECT_CONFIG" --sha "$GITHUB_SHA" --state success --description "Knowledge Core Web smoke passed" --target-url "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"; then
+              exit 0
+            fi
+            echo "::warning::Unable to publish the successful deployment status (attempt ${attempt}/4)"
+            if [[ "$attempt" -lt 4 ]]; then
+              sleep "$((attempt * 2))"
+            fi
+          done
+          echo "::warning::Deployment success status reporting is unavailable; smoke verification already passed"
       - name: Promote candidate tag and create release
         id: promote
         env:
@@ -451,7 +473,18 @@ jobs:
         if: failure() && steps.gitops.outputs.gitops_revision != ''
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
-        run: ci-templates status --config "$CI_PROJECT_CONFIG" --sha "$GITHUB_SHA" --state failure --description "Knowledge Core Web deployment failed" --target-url "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4; do
+            if ci-templates status --config "$CI_PROJECT_CONFIG" --sha "$GITHUB_SHA" --state failure --description "Knowledge Core Web deployment failed" --target-url "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"; then
+              exit 0
+            fi
+            echo "::warning::Unable to publish the failed deployment status (attempt ${attempt}/4)"
+            if [[ "$attempt" -lt 4 ]]; then
+              sleep "$((attempt * 2))"
+            fi
+          done
+          echo "::warning::Deployment failure status reporting is unavailable; preserving the original deployment failure"
 
   cleanup-candidates:
     needs: [plan, deploy-release]
