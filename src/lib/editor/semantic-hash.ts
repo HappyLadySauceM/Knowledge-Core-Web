@@ -40,6 +40,13 @@ function stableJson(value: unknown) {
   return JSON.stringify(canonicalize(value));
 }
 
+function publicationSummary(summary: string, plainText: string) {
+  const explicit = summary.trim();
+  if (explicit) return explicit;
+  const firstLine = plainText.split(/\r?\n/).map((line) => line.trim()).find(Boolean) ?? "";
+  return firstLine.slice(0, 1000);
+}
+
 /**
  * Matches the Gateway's publication hash input.  The Collaboration snapshot
  * hash is the SHA-256 of a JSON tuple (content, plain text), then the metadata
@@ -50,7 +57,7 @@ export async function publicationSemanticHash(input: PublicationHashInput) {
   const contentHash = await sha256(stableJson([input.content, input.plainText]));
   return sha256(stableJson({
     title: input.title,
-    summary: input.summary,
+    summary: publicationSummary(input.summary, input.plainText),
     slug: input.slug,
     language: input.language ?? "zh-CN",
     tags: input.tags ?? [],

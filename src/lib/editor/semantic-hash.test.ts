@@ -18,4 +18,11 @@ describe("publicationSemanticHash", () => {
     const right = { title: "Doc", summary: "", slug: "doc", content: { content: [{ type: "paragraph", content: [{ type: "text", text: "same" }], attrs: { a: 2, z: 1 } }], type: "doc" }, plainText: "same" };
     await expect(publicationSemanticHash(left)).resolves.toBe(await publicationSemanticHash(right));
   });
+
+  it("uses the first non-empty line when the summary is blank", async () => {
+    const content = { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "first line" }] }] };
+    const inferred = { title: "Doc", summary: "", slug: "doc", content, plainText: "first line" };
+    const explicit = { ...inferred, summary: "first line" };
+    await expect(publicationSemanticHash(inferred)).resolves.toBe(await publicationSemanticHash(explicit));
+  });
 });
