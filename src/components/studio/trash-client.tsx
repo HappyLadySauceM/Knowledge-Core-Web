@@ -6,6 +6,7 @@ import { RotateCcw, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AppDialog } from "@/components/ui/dialog";
 import { documentsApi } from "@/lib/api/documents";
+import type { DocumentPage } from "@/lib/api/types";
 
 export function TrashClient({ locale }: { locale: string }) {
   const client = useQueryClient();
@@ -14,7 +15,7 @@ export function TrashClient({ locale }: { locale: string }) {
   const [purgeError, setPurgeError] = useState<string | null>(null);
   const trash = useQuery({ queryKey: ["trash", q], queryFn: () => documentsApi.trash({ q, limit: 50 }).then((value) => value.data) });
   const restore = useMutation({ mutationFn: documentsApi.restore, onSuccess: () => { client.invalidateQueries({ queryKey: ["trash"] }); client.invalidateQueries({ queryKey: ["documents"] }); } });
-  const purge = useMutation({ mutationFn: ({ id, revision }: { id: string; revision: number }) => documentsApi.purge(id, revision), onSuccess: () => { setPurgeError(null); setPurgeTarget(null); client.invalidateQueries({ queryKey: ["trash"] }); client.invalidateQueries({ queryKey: ["documents"] }); }, onError: (error: Error) => setPurgeError(error.message) });
+  const purge = useMutation({ mutationFn: ({ id, revision }: { id: string; revision: number }) => documentsApi.purge(id, revision), onSuccess: (_value, variables) => { setPurgeError(null); setPurgeTarget(null); client.setQueriesData<DocumentPage>({ queryKey: ["trash"] }, (current) => current ? { ...current, items: current.items.filter((item) => item.id !== variables.id) } : current); client.invalidateQueries({ queryKey: ["trash"] }); client.invalidateQueries({ queryKey: ["documents"] }); }, onError: (error: Error) => setPurgeError(error.message) });
   const zh = locale === "zh-CN";
   return <>
     <section className="management-page"><label className="management-search"><Search size={15} /><input value={q} onChange={(event) => setQ(event.target.value)} placeholder={zh ? "搜索已删除文档" : "Search deleted documents"} /></label>{trash.error && <p className="form-error">{trash.error.message}</p>}<div className="management-list">{trash.data?.items.map((document) => <article key={document.id}><div><strong>{document.title}</strong><span>{new Date(document.deleted_at ?? document.updated_at).toLocaleString(locale)}</span></div><div className="management-actions"><Button variant="outline" size="sm" onClick={() => restore.mutate(document.id)} disabled={restore.isPending || purge.isPending}><RotateCcw size={14} />{zh ? "恢复" : "Restore"}</Button><Button variant="outline" size="sm" onClick={() => setPurgeTarget({ id: document.id, title: document.title, revision: document.metadata_revision })} disabled={restore.isPending || purge.isPending}><Trash2 size={14} />{zh ? "永久删除" : "Delete permanently"}</Button></div></article>)}</div>{!trash.isLoading && !trash.data?.items.length && <p className="empty-inline">{zh ? "回收站是空的。" : "Trash is empty."}</p>}</section>

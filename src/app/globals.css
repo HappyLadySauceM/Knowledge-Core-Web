@@ -140,7 +140,13 @@ a { color: inherit; text-decoration: none; }
 .editor-mode-popover { min-width: 15rem; }
 .editor-mode-popover [role=menuitemradio] { justify-content: flex-start; }
 .editor-publication-toggle { display: flex; align-items: center; justify-content: space-between; gap: .65rem; margin-top: .35rem; padding: .55rem .5rem .2rem; border-top: 1px solid var(--line); color: var(--muted); font-size: .78rem; }
-.editor-publication-toggle button[role=switch] { width: auto; padding: .25rem .45rem; color: var(--primary); font-size: .75rem; }
+.editor-publication-switch { position: relative; display: inline-flex !important; flex: 0 0 auto; width: 2.35rem !important; height: 1.35rem; align-items: center; padding: 0 !important; border: 1px solid var(--line) !important; border-radius: 999px !important; color: transparent !important; background: var(--surface-2) !important; cursor: pointer; transition: background .16s ease, border-color .16s ease, box-shadow .16s ease; }
+.editor-publication-switch > span { display: block; width: .95rem; height: .95rem; margin-left: .16rem; border-radius: 50%; background: var(--muted); box-shadow: 0 1px 3px rgba(20, 27, 48, .2); transition: transform .16s ease, background .16s ease; }
+.editor-publication-switch[data-state="on"] { border-color: var(--primary) !important; background: var(--primary) !important; }
+.editor-publication-switch[data-state="on"] > span { background: var(--surface); transform: translateX(1rem); }
+.editor-publication-switch:hover:not(:disabled) { border-color: var(--primary) !important; }
+.editor-publication-switch:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 22%, transparent); }
+.editor-publication-switch:disabled { opacity: .55; cursor: wait; }
 .editor-autosave-status { color: var(--muted); font-size: .72rem; white-space: nowrap; }
 .editor-popover-wrap { position: relative; }
 .editor-popover { position: absolute; top: calc(100% + .45rem); right: 0; z-index: 40; display: grid; min-width: 12rem; padding: .4rem; border: 1px solid var(--line); border-radius: .75rem; background: var(--surface); box-shadow: 0 18px 48px rgba(40, 58, 130, .16); }

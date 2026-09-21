@@ -485,8 +485,17 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
                 <button type="button" role="menuitemradio" aria-checked={modePreference === "read"} onClick={() => { setModePreference("read"); setMenu(null); }}>{t.editor.readMode}</button>
                 <div className="editor-publication-toggle">
                   <span>{documentQuery.data?.published ? t.editor.publishedVisibility : t.editor.publishVisibility}</span>
-                  <button type="button" role="switch" aria-checked={Boolean(documentQuery.data?.published)} disabled={publishing || publicationPending || !canEdit || !synced} onClick={() => void (documentQuery.data?.published ? unpublish() : publish())}>
-                    {documentQuery.data?.published ? t.editor.unpublish : t.editor.publish}
+                  <button
+                    type="button"
+                    className="editor-publication-switch"
+                    role="switch"
+                    aria-label={documentQuery.data?.published ? t.editor.unpublish : t.editor.publish}
+                    aria-checked={Boolean(documentQuery.data?.published)}
+                    data-state={documentQuery.data?.published ? "on" : "off"}
+                    disabled={publishing || publicationPending || !canEdit || !synced}
+                    onClick={() => void (documentQuery.data?.published ? unpublish() : publish())}
+                  >
+                    <span aria-hidden="true" />
                   </button>
                 </div>
               </div>

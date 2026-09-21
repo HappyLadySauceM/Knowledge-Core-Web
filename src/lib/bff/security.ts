@@ -8,6 +8,7 @@ const forwardedRequestHeaders = [
 	"content-type",
 	"if-match",
 	"idempotency-key",
+	"x-confirm-permanent-delete",
 	"traceparent",
 	"tracestate",
 	"x-request-id",

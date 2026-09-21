@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DocumentEditor } from "@/components/studio/document-editor";
@@ -10,7 +10,8 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 
-const { useEditorMock } = vi.hoisted(() => ({
+const { testState, useEditorMock } = vi.hoisted(() => ({
+  testState: { providerSynced: true },
   useEditorMock: vi.fn((_options?: { extensions?: unknown[] }, _deps?: unknown[]) => null),
 }));
 
@@ -21,15 +22,15 @@ vi.mock("@tiptap/react", () => ({
 
 vi.mock("y-indexeddb", () => ({
   IndexeddbPersistence: class {
-    whenSynced = new Promise(() => undefined);
+    whenSynced = Promise.resolve();
     destroy() {}
   },
 }));
 
 vi.mock("@/lib/collaboration/provider", () => ({
   KnowledgeWebSocketProvider: class {
-    isSynced = false;
-    whenSynced = new Promise(() => undefined);
+    isSynced = testState.providerSynced;
+    whenSynced = Promise.resolve();
     destroy() {}
     retry() {}
     resync() { return Promise.resolve(); }
@@ -101,10 +102,12 @@ async function openMoreItem(name: string) {
 
 describe("DocumentEditor chrome", () => {
   beforeEach(() => {
+    testState.providerSynced = true;
     useEditorMock.mockClear();
     vi.mocked(documentsApi.get).mockResolvedValue({ data: documentSummary });
     vi.mocked(documentsApi.remove).mockReset();
     vi.mocked(documentsApi.publish).mockReset();
+    vi.mocked(documentsApi.unpublish).mockReset();
     vi.mocked(foldersApi.list).mockResolvedValue({ data: { items: [] } });
     vi.mocked(membersApi.list).mockResolvedValue({ data: { items: [member] } });
     vi.mocked(membersApi.add).mockReset();
@@ -157,6 +160,42 @@ describe("DocumentEditor chrome", () => {
     expect(screen.queryByRole("button", { name: "Settings" })).toBeNull();
     expect(screen.queryByText("Connected")).toBeNull();
     expect(screen.queryByText("Publish")).toBeNull();
+  });
+
+  it("renders an accessible publication switch and publishes when enabled", async () => {
+    vi.mocked(documentsApi.publish).mockResolvedValue({ data: { ...documentSummary, published: true, publication_status: "published" } });
+    renderEditor();
+    fireEvent.click(await screen.findByRole("button", { name: "Editing mode" }));
+    const toggle = await screen.findByRole("switch", { name: "Publish" });
+
+    expect(toggle).toHaveAttribute("aria-checked", "false");
+    expect(toggle).toHaveAttribute("data-state", "off");
+    expect(toggle).not.toBeDisabled();
+    fireEvent.click(toggle);
+
+    await waitFor(() => expect(documentsApi.publish).toHaveBeenCalled());
+  });
+
+  it("unpublishes through the switch without changing the editor draft", async () => {
+    vi.mocked(documentsApi.get).mockResolvedValue({ data: { ...documentSummary, published: true, publication_status: "published" } });
+    vi.mocked(documentsApi.unpublish).mockResolvedValue({ data: undefined });
+    renderEditor();
+    fireEvent.click(await screen.findByRole("button", { name: "Editing mode" }));
+    const toggle = await screen.findByRole("switch", { name: "Unpublish" });
+
+    expect(toggle).toHaveAttribute("aria-checked", "true");
+    expect(toggle).toHaveAttribute("data-state", "on");
+    fireEvent.click(toggle);
+
+    await waitFor(() => expect(documentsApi.unpublish).toHaveBeenCalledWith("doc_1", 3));
+  });
+
+  it("keeps the publication switch disabled until collaboration is synced", async () => {
+    testState.providerSynced = false;
+    renderEditor();
+    fireEvent.click(await screen.findByRole("button", { name: "Editing mode" }));
+
+    expect(await screen.findByRole("switch", { name: "Publish" })).toBeDisabled();
   });
 
   it("mounts TipTap with studio extensions before collaboration is ready", async () => {

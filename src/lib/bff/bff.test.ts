@@ -3,17 +3,18 @@
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { handleAuth } from "@/lib/bff/auth";
-import { GET as handleGateway, POST as handleGatewayPost } from "@/app/api/bff/gateway/[...path]/route";
+import { DELETE as handleGatewayDelete, GET as handleGateway, POST as handleGatewayPost } from "@/app/api/bff/gateway/[...path]/route";
 
 const gatewayOrigin = "http://gateway.test";
 const webOrigin = "http://localhost:3000";
 
-function request(path: string, options: { method?: string; body?: string; cookies?: string; origin?: string; contentLength?: string } = {}) {
+function request(path: string, options: { method?: string; body?: string; cookies?: string; origin?: string; contentLength?: string; headers?: Record<string, string> } = {}) {
 	const headers = new Headers();
 	if (options.body !== undefined) headers.set("content-type", "application/json");
 	if (options.cookies) headers.set("cookie", options.cookies);
 	if (options.origin !== undefined) headers.set("origin", options.origin);
 	if (options.contentLength) headers.set("content-length", options.contentLength);
+	for (const [name, value] of Object.entries(options.headers ?? {})) headers.set(name, value);
 	return new NextRequest(`http://localhost:3000${path}`, { method: options.method ?? "GET", headers, body: options.body });
 }
 
@@ -145,6 +146,28 @@ describe("web BFF session layer", () => {
 
 		expect(response.status).toBe(413);
 		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it("forwards the permanent-delete confirmation contract without forwarding arbitrary headers", async () => {
+		fetchMock.mockResolvedValueOnce(new Response(null, { status: 202 }));
+		const response = await handleGatewayDelete(request("/api/bff/gateway/api/v1/studio/trash/doc-1", {
+			method: "DELETE",
+			cookies: "kc_access=access-old",
+			origin: webOrigin,
+			headers: {
+				"if-match": '"7"',
+				"idempotency-key": "purge-key",
+				"x-confirm-permanent-delete": "true",
+				"x-untrusted-header": "must-not-forward",
+			},
+		}), { params: Promise.resolve({ path: ["api", "v1", "studio", "trash", "doc-1"] }) });
+
+		expect(response.status).toBe(202);
+		const forwarded = new Headers(fetchMock.mock.calls[0]?.[1]?.headers);
+		expect(forwarded.get("if-match")).toBe('"7"');
+		expect(forwarded.get("idempotency-key")).toBe("purge-key");
+		expect(forwarded.get("x-confirm-permanent-delete")).toBe("true");
+		expect(forwarded.get("x-untrusted-header")).toBeNull();
 	});
 
 	it("always clears local cookies on logout, including Gateway failure", async () => {
