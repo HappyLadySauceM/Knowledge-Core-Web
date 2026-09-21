@@ -321,14 +321,6 @@ jobs:
           ci-templates artifact-cache restore --name "knowledge-core-web-release-notes-${GITHUB_RUN_ID}" --destination .
           if [[ "${{ needs.plan.outputs.has_build_changes }}" == true ]]; then
             ci-templates artifact-cache restore --pattern "knowledge-core-web-candidate-*-${GITHUB_RUN_ID}" --destination .candidates
-            for candidate in .candidates/*.json; do
-              [[ -f "$candidate" ]] || continue
-              service="$(jq -r '.service // empty' "$candidate")"
-              tag="$(jq -r '.candidate_tag // empty' "$candidate")"
-              digest="$(jq -r '.digest // empty' "$candidate")"
-              test -n "$service" -a -n "$tag" -a -n "$digest"
-              ci-templates restore-candidate --config "$CI_PROJECT_CONFIG" --service "$service" --tag "$tag" --digest "$digest"
-            done
           fi
       - name: Prepare deployment credentials
         env:
@@ -362,6 +354,18 @@ jobs:
           echo "KUBECONFIG=$RUNNER_TEMP/release/kubeconfig" >> "$GITHUB_ENV"
           echo "CI_REGISTRY_CA_FILE=$RUNNER_TEMP/release/ca.crt" >> "$GITHUB_ENV"
           echo "PUBLIC_CA_FILE=$RUNNER_TEMP/release/ca-bundle.crt" >> "$GITHUB_ENV"
+      - name: Restore candidate tags by immutable digest
+        if: needs.plan.outputs.has_build_changes == 'true'
+        run: |
+          set -euo pipefail
+          for candidate in .candidates/*.json; do
+            [[ -f "$candidate" ]] || continue
+            service="$(jq -r '.service // empty' "$candidate")"
+            tag="$(jq -r '.candidate_tag // empty' "$candidate")"
+            digest="$(jq -r '.digest // empty' "$candidate")"
+            test -n "$service" -a -n "$tag" -a -n "$digest"
+            ci-templates restore-candidate --config "$CI_PROJECT_CONFIG" --service "$service" --tag "$tag" --digest "$digest"
+          done
       - name: Assemble digest-pinned image overrides
         run: |
           set -euo pipefail
