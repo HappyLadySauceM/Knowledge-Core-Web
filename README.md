@@ -28,6 +28,8 @@ pnpm build-storybook
 
 生产镜像使用 Next.js standalone server 构建；运行时通过 `KNOWLEDGE_CORE_GATEWAY_URL` 访问集群内 Gateway。`.github/workflows/pipeline.yml` 从 `.ci/pipeline.yaml` 读取服务、Harbor、Argo 和 Smoke 配置：质量/部署任务使用 `hls-standard`，特权镜像构建使用 `hls-builder`；当前最多 8 个 standard（request 2 CPU / 1Gi，limit 4 CPU / 4Gi）和 8 个 builder（DinD 4 CPU / 4Gi + runner 4 CPU / 1Gi）。`web-verify-build` 含 lint/typecheck/test/build、Playwright e2e 和 Storybook；没有独立的 `web-pull-request`。pipeline 末尾 `notify` job 发 CI 飞书卡；`.github/workflows/feishu-notify.yml` 只覆盖 PR、Issue、Review 和 Release，使用组织 `ci-templates` 复合 Action 与组织 secrets `FEISHU_WEBHOOK_URL` / `FEISHU_WEBHOOK_SECRET`，不使用 `release` environment。语言/工具缓存在节点 `/var/lib/hls-ci-cache`，不使用 GitHub Actions cache。Playwright CI 的 `webServer.timeout` 为 180s。Runner 的外部 HTTP(S) 流量由集群环境注入的 sing-box 代理控制，集群 API 使用 `https://kubernetes.default.svc:443`。校验结果、候选 digest 和 release 摘要通过 GitHub Artifacts 传递；`dev` 分支只有在 Argo CD 健康检查、部署 Smoke 和 Harbor API promotion 成功后才 fast-forward 到 `main` 并创建版本 Release。失败部署保留 Harbor 候选 tag，供同一 SHA 重跑复用；只有候选成功提升为 active tag 后才清理。runner 不挂载宿主机 Docker socket。
 
+工作流通过固定 SHA 的 `ci-templates` 动作恢复带摘要校验的本地 Artifact 缓存，远端下载最多五次指数退避；发布前会从候选制品恢复同一 digest 的 Harbor 标签，防止 failed-only rerun 因标签被误删而失败。每日 `maintenance.yml` 以 fail-closed 方式清理超过 72 小时的候选和运行制品，并在显式缓存目录超过 80% 使用率时按 LRU 回收到 70%。
+
 ## 边界约定
 
 - 浏览器不直接持有 access/refresh token；认证与 Gateway 请求通过同源 BFF 转换为 HttpOnly cookie 会话。

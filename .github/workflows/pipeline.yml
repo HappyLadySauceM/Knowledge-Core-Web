@@ -15,6 +15,13 @@ env:
   NODE_USE_ENV_PROXY: "1"
   NPM_CONFIG_REGISTRY: "https://registry.npmmirror.com"
   COREPACK_NPM_REGISTRY: "https://registry.npmmirror.com"
+  NPM_CONFIG_PREFER_OFFLINE: "true"
+  NPM_CONFIG_FETCH_RETRIES: "5"
+  NPM_CONFIG_FETCH_RETRY_FACTOR: "2"
+  NPM_CONFIG_FETCH_RETRY_MINTIMEOUT: "1000"
+  NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT: "30000"
+  CI_DOWNLOAD_RETRY_ATTEMPTS: "5"
+  CI_ARTIFACT_CACHE_ROOT: "/cache/ci-templates/artifacts"
   PLAYWRIGHT_DOWNLOAD_HOST: "https://cdn.npmmirror.com/binaries/playwright"
 
 # Serialize releases for this project/branch while allowing the matrix jobs in
@@ -24,6 +31,29 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  track-start:
+    if: vars.FEISHU_TASK_TRACKER_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: release
+    continue-on-error: true
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Mark Feishu pipeline task in progress
+        uses: HappyLadySauceM/ci-templates/.github/actions/feishu-pipeline-task@eba5084e8c19ef384e18b3e230f7fe0d3c17b4de
+        with:
+          operation: sync
+          phase: in_progress
+          app-id: ${{ vars.FEISHU_APP_ID }}
+          app-secret: ${{ secrets.FEISHU_APP_SECRET }}
+          chat-id: ${{ vars.FEISHU_CHAT_ID }}
+          github-custom-attr-id: ${{ vars.FEISHU_GITHUB_ATTR_ID }}
+          workflow-name: knowledge-core-web-pipeline
+          github-token: ${{ github.token }}
+          deepseek-api-key: ${{ secrets.DEEPSEEK_API_KEY }}
+
   plan:
     runs-on: hls-standard
     timeout-minutes: 10
@@ -156,9 +186,10 @@ jobs:
         with:
           fetch-depth: 1
           fetch-tags: true
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: knowledge-core-web-plan-${{ github.run_id }}
+      - name: Restore plan artifact with cache fallback
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: ci-templates artifact-cache restore --name "knowledge-core-web-plan-${GITHUB_RUN_ID}" --destination .
       - name: Generate release summary
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
@@ -186,24 +217,10 @@ jobs:
         with:
           fetch-depth: 1
       - name: Prepare Harbor credentials
-        env:
-          HARBOR_DOCKER_CONFIG_JSON: ${{ secrets.HARBOR_DOCKER_CONFIG_JSON }}
-          HARBOR_CA_PEM: ${{ secrets.HARBOR_CA_PEM }}
-        run: |
-          set -euo pipefail
-          umask 077
-          install -d "$RUNNER_TEMP/harbor"
-          printf '%s' "$HARBOR_DOCKER_CONFIG_JSON" > "$RUNNER_TEMP/harbor/config.json"
-          printf '%s' "$HARBOR_CA_PEM" > "$RUNNER_TEMP/harbor/ca.crt"
-          test -s "$RUNNER_TEMP/harbor/config.json" && test -s "$RUNNER_TEMP/harbor/ca.crt"
-          if [[ -s /etc/ssl/certs/ca-certificates.crt ]]; then
-            cat /etc/ssl/certs/ca-certificates.crt "$RUNNER_TEMP/harbor/ca.crt" > "$RUNNER_TEMP/harbor/ca-bundle.crt"
-          else
-            cp "$RUNNER_TEMP/harbor/ca.crt" "$RUNNER_TEMP/harbor/ca-bundle.crt"
-          fi
-          echo "DOCKER_CONFIG=$RUNNER_TEMP/harbor" >> "$GITHUB_ENV"
-          echo "SSL_CERT_FILE=$RUNNER_TEMP/harbor/ca-bundle.crt" >> "$GITHUB_ENV"
-          echo "CI_REGISTRY_CA_FILE=$RUNNER_TEMP/harbor/ca.crt" >> "$GITHUB_ENV"
+        uses: HappyLadySauceM/ci-templates/.github/actions/prepare-harbor@eba5084e8c19ef384e18b3e230f7fe0d3c17b4de
+        with:
+          docker-config-json: ${{ secrets.HARBOR_DOCKER_CONFIG_JSON }}
+          ca-pem: ${{ secrets.HARBOR_CA_PEM }}
       - name: Verify BuildKit and prewarm configured base image
         run: |
           set -euo pipefail
@@ -225,29 +242,15 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 1
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: knowledge-core-web-verification-${{ github.run_id }}
-          path: .verification
-      - name: Prepare Harbor credentials
+      - name: Restore verification artifact with cache fallback
         env:
-          HARBOR_DOCKER_CONFIG_JSON: ${{ secrets.HARBOR_DOCKER_CONFIG_JSON }}
-          HARBOR_CA_PEM: ${{ secrets.HARBOR_CA_PEM }}
-        run: |
-          set -euo pipefail
-          umask 077
-          install -d "$RUNNER_TEMP/harbor"
-          printf '%s' "$HARBOR_DOCKER_CONFIG_JSON" > "$RUNNER_TEMP/harbor/config.json"
-          printf '%s' "$HARBOR_CA_PEM" > "$RUNNER_TEMP/harbor/ca.crt"
-          test -s "$RUNNER_TEMP/harbor/config.json" && test -s "$RUNNER_TEMP/harbor/ca.crt"
-          if [[ -s /etc/ssl/certs/ca-certificates.crt ]]; then
-            cat /etc/ssl/certs/ca-certificates.crt "$RUNNER_TEMP/harbor/ca.crt" > "$RUNNER_TEMP/harbor/ca-bundle.crt"
-          else
-            cp "$RUNNER_TEMP/harbor/ca.crt" "$RUNNER_TEMP/harbor/ca-bundle.crt"
-          fi
-          echo "DOCKER_CONFIG=$RUNNER_TEMP/harbor" >> "$GITHUB_ENV"
-          echo "SSL_CERT_FILE=$RUNNER_TEMP/harbor/ca-bundle.crt" >> "$GITHUB_ENV"
-          echo "CI_REGISTRY_CA_FILE=$RUNNER_TEMP/harbor/ca.crt" >> "$GITHUB_ENV"
+          GITHUB_TOKEN: ${{ github.token }}
+        run: ci-templates artifact-cache restore --name "knowledge-core-web-verification-${GITHUB_RUN_ID}" --destination .verification
+      - name: Prepare Harbor credentials
+        uses: HappyLadySauceM/ci-templates/.github/actions/prepare-harbor@eba5084e8c19ef384e18b3e230f7fe0d3c17b4de
+        with:
+          docker-config-json: ${{ secrets.HARBOR_DOCKER_CONFIG_JSON }}
+          ca-pem: ${{ secrets.HARBOR_CA_PEM }}
       - name: Build immutable candidate
         env:
           SERVICE: ${{ matrix.service }}
@@ -309,18 +312,24 @@ jobs:
           # 快进 main 需要 origin/main 是 HEAD 的祖先。
           fetch-depth: 0
           token: ${{ steps.app-token.outputs.token }}
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: knowledge-core-web-plan-${{ github.run_id }}
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: knowledge-core-web-release-notes-${{ github.run_id }}
-      - if: needs.plan.outputs.has_build_changes == 'true'
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          pattern: knowledge-core-web-candidate-*-${{ github.run_id }}
-          path: .candidates
-          merge-multiple: true
+      - name: Restore deployment artifacts with cache fallback
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ci-templates artifact-cache restore --name "knowledge-core-web-plan-${GITHUB_RUN_ID}" --destination .
+          ci-templates artifact-cache restore --name "knowledge-core-web-release-notes-${GITHUB_RUN_ID}" --destination .
+          if [[ "${{ needs.plan.outputs.has_build_changes }}" == true ]]; then
+            ci-templates artifact-cache restore --pattern "knowledge-core-web-candidate-*-${GITHUB_RUN_ID}" --destination .candidates
+            for candidate in .candidates/*.json; do
+              [[ -f "$candidate" ]] || continue
+              service="$(jq -r '.service // empty' "$candidate")"
+              tag="$(jq -r '.candidate_tag // empty' "$candidate")"
+              digest="$(jq -r '.digest // empty' "$candidate")"
+              test -n "$service" -a -n "$tag" -a -n "$digest"
+              ci-templates restore-candidate --config "$CI_PROJECT_CONFIG" --service "$service" --tag "$tag" --digest "$digest"
+            done
+          fi
       - name: Prepare deployment credentials
         env:
           HARBOR_DOCKER_CONFIG_JSON: ${{ secrets.HARBOR_DOCKER_CONFIG_JSON }}
@@ -497,23 +506,10 @@ jobs:
         with:
           fetch-depth: 1
       - name: Prepare Harbor credentials
-        env:
-          HARBOR_DOCKER_CONFIG_JSON: ${{ secrets.HARBOR_DOCKER_CONFIG_JSON }}
-          HARBOR_CA_PEM: ${{ secrets.HARBOR_CA_PEM }}
-        run: |
-          set -euo pipefail
-          umask 077
-          install -d "$RUNNER_TEMP/harbor"
-          printf '%s' "$HARBOR_DOCKER_CONFIG_JSON" > "$RUNNER_TEMP/harbor/config.json"
-          printf '%s' "$HARBOR_CA_PEM" > "$RUNNER_TEMP/harbor/ca.crt"
-          test -s "$RUNNER_TEMP/harbor/config.json" && test -s "$RUNNER_TEMP/harbor/ca.crt"
-          if [[ -s /etc/ssl/certs/ca-certificates.crt ]]; then
-            cat /etc/ssl/certs/ca-certificates.crt "$RUNNER_TEMP/harbor/ca.crt" > "$RUNNER_TEMP/harbor/ca-bundle.crt"
-          else
-            cp "$RUNNER_TEMP/harbor/ca.crt" "$RUNNER_TEMP/harbor/ca-bundle.crt"
-          fi
-          echo "DOCKER_CONFIG=$RUNNER_TEMP/harbor" >> "$GITHUB_ENV"
-          echo "SSL_CERT_FILE=$RUNNER_TEMP/harbor/ca-bundle.crt" >> "$GITHUB_ENV"
+        uses: HappyLadySauceM/ci-templates/.github/actions/prepare-harbor@eba5084e8c19ef384e18b3e230f7fe0d3c17b4de
+        with:
+          docker-config-json: ${{ secrets.HARBOR_DOCKER_CONFIG_JSON }}
+          ca-pem: ${{ secrets.HARBOR_CA_PEM }}
       - name: Remove candidate tag after promotion or rollback
         env:
           BUILD_SERVICES: ${{ needs.plan.outputs.build_services }}
@@ -541,6 +537,21 @@ jobs:
       actions: read
       contents: read
     steps:
+      - name: Mark Feishu pipeline task complete
+        if: vars.FEISHU_TASK_TRACKER_ENABLED == 'true'
+        continue-on-error: true
+        uses: HappyLadySauceM/ci-templates/.github/actions/feishu-pipeline-task@eba5084e8c19ef384e18b3e230f7fe0d3c17b4de
+        with:
+          operation: sync
+          phase: completed
+          conclusion: ${{ contains(needs.*.result, 'failure') && 'failure' || contains(needs.*.result, 'cancelled') && 'cancelled' || 'success' }}
+          app-id: ${{ vars.FEISHU_APP_ID }}
+          app-secret: ${{ secrets.FEISHU_APP_SECRET }}
+          chat-id: ${{ vars.FEISHU_CHAT_ID }}
+          github-custom-attr-id: ${{ vars.FEISHU_GITHUB_ATTR_ID }}
+          workflow-name: knowledge-core-web-pipeline
+          github-token: ${{ github.token }}
+          deepseek-api-key: ${{ secrets.DEEPSEEK_API_KEY }}
       - name: Notify Feishu CI
         # Pin to the ci-templates commit that added CI-card notify.py.
         # 钉死到加入 CI 卡片的 ci-templates 提交。

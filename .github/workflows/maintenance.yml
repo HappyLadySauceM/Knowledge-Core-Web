@@ -1,0 +1,53 @@
+name: knowledge-core-web-ci-maintenance
+
+on:
+  schedule:
+    - cron: "27 3 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Only print candidates and cache entries"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  actions: read
+  contents: read
+
+env:
+  CI_PROJECT_CONFIG: .ci/pipeline.yaml
+  CI_ARTIFACT_CACHE_ROOT: /cache/ci-templates/artifacts
+
+jobs:
+  prune:
+    runs-on: hls-standard
+    timeout-minutes: 15
+    environment: release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+      - name: Prepare Harbor credentials
+        uses: HappyLadySauceM/ci-templates/.github/actions/prepare-harbor@eba5084e8c19ef384e18b3e230f7fe0d3c17b4de
+        with:
+          docker-config-json: ${{ secrets.HARBOR_DOCKER_CONFIG_JSON }}
+          ca-pem: ${{ secrets.HARBOR_CA_PEM }}
+      - name: Prune expired candidate tags
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          dry_run="${{ inputs.dry_run || 'false' }}"
+          flags=(--config "$CI_PROJECT_CONFIG" --max-age-hours 72)
+          [[ "$dry_run" == true ]] && flags+=(--dry-run)
+          ci-templates prune-candidates "${flags[@]}" | tee candidate-prune.json
+      - name: Prune local run artifact cache
+        run: |
+          set -euo pipefail
+          dry_run="${{ inputs.dry_run || 'false' }}"
+          flags=(artifact-cache prune --max-age-hours 72)
+          [[ "$dry_run" == true ]] && flags+=(--dry-run)
+          ci-templates "${flags[@]}"
+      - name: Prune stale dependency and tool cache under pressure
+        run: ci-templates cache-prune --root /cache ${{ inputs.dry_run && '--dry-run' || '' }}
