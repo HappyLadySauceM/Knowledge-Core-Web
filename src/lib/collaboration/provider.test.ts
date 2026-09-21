@@ -129,9 +129,11 @@ async function completeHandshake(socket: FakeWebSocket, serverDoc: Y.Doc) {
   const before = socket.sent.length;
   socket.incoming(serverStep1(serverDoc));
   socket.incoming(serverStep2(serverDoc));
+  await vi.waitFor(() => expect(socket.sent.length).toBeGreaterThan(before + 1));
   for (const payload of socket.sent.slice(before)) {
     applyClientPayload(serverDoc, payload);
   }
+  socket.incoming(serverStep2(serverDoc));
 }
 
 describe("reconnectDelay", () => {
@@ -146,7 +148,53 @@ describe("reconnectDelay", () => {
 describe("KnowledgeWebSocketProvider handshake", () => {
   afterEach(() => {
     sockets.splice(0);
+    vi.useRealTimers();
     vi.unstubAllGlobals();
+  });
+
+  it("coalesces local updates during the idle window and confirms the batch with a barrier", async () => {
+    vi.stubGlobal("WebSocket", FakeWebSocket);
+    const serverDoc = new Y.Doc();
+    const { provider, socket, doc } = await connectProvider();
+    await completeHandshake(socket, serverDoc);
+    vi.useFakeTimers();
+    const before = socket.sent.length;
+
+    doc.getMap("root").set("first", "local");
+    doc.getMap("root").set("second", "local");
+    await vi.advanceTimersByTimeAsync(299);
+    expect(socket.sent).toHaveLength(before);
+
+    await vi.advanceTimersByTimeAsync(1);
+    await Promise.resolve();
+    const batch = socket.sent.slice(before);
+    expect(batch).toHaveLength(2);
+    expect(batch.flatMap(syncTypes)).toEqual(expect.arrayContaining([
+      syncProtocol.messageYjsUpdate,
+      syncProtocol.messageYjsSyncStep1,
+    ]));
+    applyClientPayload(serverDoc, batch[0]!);
+    socket.incoming(serverStep2(serverDoc));
+    await expect(provider.whenSynced).resolves.toBeUndefined();
+    expect(provider.isSynced).toBe(true);
+    provider.destroy();
+  });
+
+  it("flushes continuous input at the maximum wait even when the idle window keeps moving", async () => {
+    vi.stubGlobal("WebSocket", FakeWebSocket);
+    const serverDoc = new Y.Doc();
+    const { provider, socket, doc } = await connectProvider();
+    await completeHandshake(socket, serverDoc);
+    vi.useFakeTimers();
+    const before = socket.sent.length;
+
+    for (let index = 0; index < 12; index += 1) {
+      doc.getMap("root").set(`key-${index}`, index);
+      await vi.advanceTimersByTimeAsync(100);
+    }
+    await Promise.resolve();
+    expect(socket.sent.length).toBeGreaterThan(before);
+    provider.destroy();
   });
 
   it("becomes synced only after the server Step1 reply and Step2, then resyncs on Step2 alone", async () => {
@@ -159,6 +207,10 @@ describe("KnowledgeWebSocketProvider handshake", () => {
     expect(provider.isSynced).toBe(false);
 
     socket.incoming(serverStep1(serverDoc));
+    socket.incoming(serverStep2(serverDoc));
+    expect(provider.isSynced).toBe(false);
+    await vi.waitFor(() => expect(socket.sent.length).toBeGreaterThan(2));
+    for (const payload of socket.sent.slice(1)) applyClientPayload(serverDoc, payload);
     socket.incoming(serverStep2(serverDoc));
     expect(provider.isSynced).toBe(true);
 
@@ -201,8 +253,9 @@ describe("KnowledgeWebSocketProvider handshake", () => {
     const barrierTypes = barrierPayloads.flatMap(syncTypes);
     expect(barrierTypes).toContain(syncProtocol.messageYjsSyncStep1);
     expect(barrierTypes).not.toContain(syncProtocol.messageYjsSyncStep2);
-    for (const payload of socket.sent.slice(0, beforeBarrier)) {
-      applyClientPayload(serverDoc, payload);
+    for (const payload of socket.sent.slice(0, beforeBarrier)) applyClientPayload(serverDoc, payload);
+    for (const payload of barrierPayloads) {
+      if (!syncTypes(payload).includes(syncProtocol.messageYjsSyncStep1)) applyClientPayload(serverDoc, payload);
     }
     socket.incoming(serverStep2(serverDoc));
     await flushed;

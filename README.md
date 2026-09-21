@@ -32,6 +32,6 @@ pnpm build-storybook
 
 - 浏览器不直接持有 access/refresh token；认证与 Gateway 请求通过同源 BFF 转换为 HttpOnly cookie 会话。
 - `src/lib/api/types.ts` 只描述稳定的前后端契约；`gateway.ts` 是唯一的 Gateway 请求入口。
-- Studio 通过领域客户端接入 Gateway，支持文档与文件夹管理、回收站、永久删除、发布/更新、成员权限和 Yjs 实时协作；文档编辑稿持续自动保存，公开页只读取最近一次发布快照。文档、媒体、管理配置和账号安全使用独立的后台 Shell，公开站点导航不会复用到后台。
+- Studio 通过领域客户端接入 Gateway，支持文档与文件夹管理、回收站、永久删除、发布/更新、成员权限和 Yjs 实时协作；编辑稿由 IndexedDB 即时落盘，WebSocket 增量在 300ms 空闲或 1200ms 最大等待后合并提交，公开页只读取最近一次发布快照并保留快照中的空段落。文档、媒体、管理配置和账号安全使用独立的后台 Shell，公开站点导航不会复用到后台。
 - 通用媒体库支持 multipart 直传、断点记录、扫描状态、下载、回收与恢复；旧文档附件接口只保留公开内容的只读兼容渲染。
 - 管理员可在 `/{locale}/admin` 维护 site、email、ai 配置并查看当前修订的可靠投递状态。

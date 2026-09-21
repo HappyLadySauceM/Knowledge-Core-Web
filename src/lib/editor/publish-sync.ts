@@ -9,12 +9,13 @@ export type PublishSyncCopy = {
 };
 
 export type PublishSyncProvider = {
-  whenSynced: Promise<unknown>;
+  whenReady: Promise<unknown>;
+  isReady: boolean;
   isSynced: boolean;
 };
 
-// Fail closed until IndexedDB persistence and the Yjs/WebSocket handshake have both finished.
-// IndexedDB 持久化与 Yjs/WebSocket 握手都完成前不得发布。
+// Fail closed until IndexedDB persistence and the initial Yjs/WebSocket handshake have finished.
+// IndexedDB 持久化与首次 Yjs/WebSocket 握手完成前不得发布；待保存增量由 flushAndSync 排空。
 export async function waitForPublishReady(input: {
   persistenceSynced: Promise<unknown>;
   provider: PublishSyncProvider | null;
@@ -28,7 +29,7 @@ export async function waitForPublishReady(input: {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     await Promise.race([
-      Promise.all([input.persistenceSynced, provider.whenSynced]),
+      Promise.all([input.persistenceSynced, provider.whenReady]),
       new Promise<never>((_, reject) => {
         timer = setTimeout(() => reject(new Error("Collaboration is not ready")), timeoutMs);
       }),
@@ -36,7 +37,7 @@ export async function waitForPublishReady(input: {
   } finally {
     if (timer) clearTimeout(timer);
   }
-  if (!provider.isSynced) {
+  if (!provider.isReady) {
     throw new Error("Collaboration is not ready");
   }
 }

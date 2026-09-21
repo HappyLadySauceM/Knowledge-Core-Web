@@ -26,7 +26,7 @@ function precondition() {
 
 describe("waitForPublishReady", () => {
   it("resolves after persistence and the provider handshake are synced", async () => {
-    const provider = { whenSynced: Promise.resolve(), isSynced: true };
+    const provider = { whenReady: Promise.resolve(), isReady: true, isSynced: true };
     await expect(
       waitForPublishReady({ persistenceSynced: Promise.resolve(), provider, timeoutMs: 200 }),
     ).resolves.toBeUndefined();
@@ -39,7 +39,7 @@ describe("waitForPublishReady", () => {
     await expect(
       waitForPublishReady({
         persistenceSynced: Promise.resolve(),
-        provider: { whenSynced: Promise.resolve(), isSynced: false },
+        provider: { whenReady: Promise.resolve(), isReady: false, isSynced: false },
         timeoutMs: 20,
       }),
     ).rejects.toThrow(/not ready/);
@@ -49,7 +49,7 @@ describe("waitForPublishReady", () => {
     await expect(
       waitForPublishReady({
         persistenceSynced: new Promise(() => undefined),
-        provider: { whenSynced: Promise.resolve(), isSynced: true },
+        provider: { whenReady: Promise.resolve(), isReady: true, isSynced: false },
         timeoutMs: 20,
       }),
     ).rejects.toThrow(/not ready/);

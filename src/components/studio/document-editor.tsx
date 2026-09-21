@@ -12,7 +12,7 @@ import { AppDialog } from "@/components/ui/dialog";
 import { documentsApi } from "@/lib/api/documents";
 import { foldersApi } from "@/lib/api/folders";
 import { membersApi } from "@/lib/api/collaboration";
-import { KnowledgeWebSocketProvider, type CollaborationStatus } from "@/lib/collaboration/provider";
+import { KnowledgeWebSocketProvider, type CollaborationSaveState, type CollaborationStatus } from "@/lib/collaboration/provider";
 import { uploadAttachmentFile } from "@/components/studio/attachment-uploader";
 import { mapPublishError, publishAfterSync, waitForPublishReady } from "@/lib/editor/publish-sync";
 import { normalizeLinkHref } from "@/lib/editor/selection-toolbar";
@@ -65,6 +65,7 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
   const [provider, setProvider] = useState<KnowledgeWebSocketProvider | null>(null);
   const [sessionEpoch, setSessionEpoch] = useState(0);
   const [status, setStatus] = useState<CollaborationStatus>("connecting");
+  const [saveState, setSaveState] = useState<CollaborationSaveState>("saved");
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState("");
   const [autosaveNotice, setAutosaveNotice] = useState("");
@@ -150,6 +151,7 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
           ydoc,
           {
             onStatus: (nextStatus) => { if (active) setStatus(nextStatus); },
+            onSaveState: (nextSaveState) => { if (active) setSaveState(nextSaveState); },
             onError: (reason) => { if (active) setError(sanitizeEditorError(reason.message, t.editor)); },
             onTerminal: (closeCode) => {
               if (!active || closeCode !== 4409) return;
@@ -188,6 +190,24 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
     };
     // The provider is intentionally created once for this document.
   }, [documentId, sessionEpoch, t.editor]);
+
+  useEffect(() => {
+    if (!provider) return undefined;
+    const flush = () => void provider.flushOutbound().catch(() => undefined);
+    const flushWhenHidden = () => {
+      if (document.visibilityState === "hidden") flush();
+    };
+    document.addEventListener("visibilitychange", flushWhenHidden);
+    window.addEventListener("pagehide", flush);
+    return () => {
+      document.removeEventListener("visibilitychange", flushWhenHidden);
+      window.removeEventListener("pagehide", flush);
+    };
+  }, [provider]);
+
+  useEffect(() => {
+    if (modePreference === "read") void provider?.flushOutbound().catch(() => undefined);
+  }, [modePreference, provider]);
 
   const canEdit = documentQuery.data?.access === "owner" || documentQuery.data?.access === "editor";
   const writing = canEdit && modePreference === "edit" && !publishing;
@@ -411,13 +431,28 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
 
   const publicationStatus = documentQuery.data?.publication_status;
   const publicationPending = publicationStatus === "publishing" || publicationStatus === "unpublishing";
-  const synced = Boolean(provider?.isSynced);
+  const collaborationReady = Boolean(provider?.isReady);
+  const saveIndicatorState: CollaborationSaveState = !canEdit
+    ? "saved"
+    : status === "offline" || saveState === "offline-pending"
+      ? "offline-pending"
+      : status !== "connected" || saveState === "saving"
+        ? "saving"
+        : "saved";
+  const [visibleSaveState, setVisibleSaveState] = useState<CollaborationSaveState>("saved");
+  useEffect(() => {
+    const timer = window.setTimeout(
+      () => setVisibleSaveState(saveIndicatorState),
+      saveIndicatorState === "saving" ? 500 : 0,
+    );
+    return () => window.clearTimeout(timer);
+  }, [saveIndicatorState]);
   const statusText = canEdit ? collaborationLabel(status, t.editor) : t.editor.readOnly;
   const autosaveStatus = !canEdit
     ? t.editor.readOnly
-    : status === "offline"
+    : visibleSaveState === "offline-pending"
       ? t.editor.offlinePending
-      : synced && status === "connected"
+      : visibleSaveState === "saved"
         ? t.editor.saved
         : t.editor.saving;
   const visibleError = sanitizeEditorError(error || documentQuery.data?.publication_error || "", t.editor);
@@ -428,7 +463,7 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
   const byline = t.editor.byline.replace("{author}", ownerName).replace("{time}", updatedAt);
   // Publication is a document action, not an editing-mode action. Owners and
   // editors may publish/update from the mode menu even while they are reading.
-  const publishDisabled = publishing || publicationPending || !canEdit || !synced;
+  const publishDisabled = publishing || publicationPending || !canEdit || !collaborationReady;
   const publishLabel = publishing || publicationStatus === "publishing" ? t.editor.publishing : t.editor.update;
 
   return (
@@ -492,7 +527,7 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
                     aria-label={documentQuery.data?.published ? t.editor.unpublish : t.editor.publish}
                     aria-checked={Boolean(documentQuery.data?.published)}
                     data-state={documentQuery.data?.published ? "on" : "off"}
-                    disabled={publishing || publicationPending || !canEdit || !synced}
+                    disabled={publishing || publicationPending || !canEdit || !collaborationReady}
                     onClick={() => void (documentQuery.data?.published ? unpublish() : publish())}
                   >
                     <span aria-hidden="true" />

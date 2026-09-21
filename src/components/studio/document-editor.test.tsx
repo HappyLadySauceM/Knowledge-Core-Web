@@ -11,7 +11,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 const { testState, useEditorMock } = vi.hoisted(() => ({
-  testState: { providerSynced: true },
+  testState: { providerSynced: true, providerReady: true },
   useEditorMock: vi.fn((_options?: { extensions?: unknown[] }, _deps?: unknown[]) => null),
 }));
 
@@ -30,6 +30,8 @@ vi.mock("y-indexeddb", () => ({
 vi.mock("@/lib/collaboration/provider", () => ({
   KnowledgeWebSocketProvider: class {
     isSynced = testState.providerSynced;
+    isReady = testState.providerReady;
+    whenReady = Promise.resolve();
     whenSynced = Promise.resolve();
     destroy() {}
     retry() {}
@@ -103,6 +105,7 @@ async function openMoreItem(name: string) {
 describe("DocumentEditor chrome", () => {
   beforeEach(() => {
     testState.providerSynced = true;
+    testState.providerReady = true;
     useEditorMock.mockClear();
     vi.mocked(documentsApi.get).mockResolvedValue({ data: documentSummary });
     vi.mocked(documentsApi.remove).mockReset();
@@ -190,12 +193,24 @@ describe("DocumentEditor chrome", () => {
     await waitFor(() => expect(documentsApi.unpublish).toHaveBeenCalledWith("doc_1", 3));
   });
 
-  it("keeps the publication switch disabled until collaboration is synced", async () => {
+  it("keeps the publication switch disabled until collaboration is ready", async () => {
     testState.providerSynced = false;
+    testState.providerReady = false;
     renderEditor();
     fireEvent.click(await screen.findByRole("button", { name: "Editing mode" }));
 
     expect(await screen.findByRole("switch", { name: "Publish" })).toBeDisabled();
+  });
+
+  it("keeps the update action available while a confirmed connection has a pending batch", async () => {
+    testState.providerSynced = false;
+    testState.providerReady = true;
+    vi.mocked(documentsApi.get).mockResolvedValue({
+      data: { ...documentSummary, published: true, publication_status: "published" },
+    });
+    renderEditor();
+
+    expect(await screen.findByRole("button", { name: "Update" })).not.toBeDisabled();
   });
 
   it("mounts TipTap with studio extensions before collaboration is ready", async () => {

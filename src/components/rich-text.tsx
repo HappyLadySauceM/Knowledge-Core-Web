@@ -22,6 +22,10 @@ function renderNode(node: RichTextNode, index: number): React.ReactNode {
     return value;
   }, text);
   const key = `${node.type}-${index}`;
+  if (node.type === "paragraph") {
+    const empty = !node.text && (!node.content || node.content.length === 0);
+    return <p key={key} className={empty ? "rich-text-empty-paragraph" : undefined}>{empty ? <br aria-hidden="true" /> : text}</p>;
+  }
   if (node.type === "heading") {
     const level = Math.min(6, Math.max(1, Number(node.attrs?.level ?? 1)));
     const Heading = `h${level}` as ElementType;
