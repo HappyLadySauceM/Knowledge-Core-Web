@@ -42,7 +42,7 @@ jobs:
       contents: read
     steps:
       - name: Mark Feishu pipeline task in progress
-        uses: HappyLadySauceM/ci-templates/.github/actions/feishu-pipeline-task@4a5f1a071a528db0b3dbb602c7570e94f5a3f447
+        uses: HappyLadySauceM/ci-templates/.github/actions/feishu-pipeline-task@4bd2907d76f1b48640d3befa7c898ff24522e6b8
         with:
           operation: sync
           phase: in_progress
@@ -217,7 +217,7 @@ jobs:
         with:
           fetch-depth: 1
       - name: Prepare Harbor credentials
-        uses: HappyLadySauceM/ci-templates/.github/actions/prepare-harbor@4a5f1a071a528db0b3dbb602c7570e94f5a3f447
+        uses: HappyLadySauceM/ci-templates/.github/actions/prepare-harbor@4bd2907d76f1b48640d3befa7c898ff24522e6b8
         with:
           docker-config-json: ${{ secrets.HARBOR_DOCKER_CONFIG_JSON }}
           ca-pem: ${{ secrets.HARBOR_CA_PEM }}
@@ -247,7 +247,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: ci-templates artifact-cache restore --name "knowledge-core-web-verification-${GITHUB_RUN_ID}" --destination .verification
       - name: Prepare Harbor credentials
-        uses: HappyLadySauceM/ci-templates/.github/actions/prepare-harbor@4a5f1a071a528db0b3dbb602c7570e94f5a3f447
+        uses: HappyLadySauceM/ci-templates/.github/actions/prepare-harbor@4bd2907d76f1b48640d3befa7c898ff24522e6b8
         with:
           docker-config-json: ${{ secrets.HARBOR_DOCKER_CONFIG_JSON }}
           ca-pem: ${{ secrets.HARBOR_CA_PEM }}
@@ -510,7 +510,7 @@ jobs:
         with:
           fetch-depth: 1
       - name: Prepare Harbor credentials
-        uses: HappyLadySauceM/ci-templates/.github/actions/prepare-harbor@4a5f1a071a528db0b3dbb602c7570e94f5a3f447
+        uses: HappyLadySauceM/ci-templates/.github/actions/prepare-harbor@4bd2907d76f1b48640d3befa7c898ff24522e6b8
         with:
           docker-config-json: ${{ secrets.HARBOR_DOCKER_CONFIG_JSON }}
           ca-pem: ${{ secrets.HARBOR_CA_PEM }}
@@ -544,7 +544,7 @@ jobs:
       - name: Mark Feishu pipeline task complete
         if: vars.FEISHU_TASK_TRACKER_ENABLED == 'true'
         continue-on-error: true
-        uses: HappyLadySauceM/ci-templates/.github/actions/feishu-pipeline-task@4a5f1a071a528db0b3dbb602c7570e94f5a3f447
+        uses: HappyLadySauceM/ci-templates/.github/actions/feishu-pipeline-task@4bd2907d76f1b48640d3befa7c898ff24522e6b8
         with:
           operation: sync
           phase: completed
