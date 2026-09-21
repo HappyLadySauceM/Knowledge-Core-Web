@@ -53,6 +53,7 @@ Sources: `detected:project-scripts`, `package.json`, `user-confirmed`
 Status: `verified`
 
 - `.github/workflows/feishu-notify.yml`
+- `.github/workflows/maintenance.yml`
 - `.github/workflows/pipeline.yml`
 
 Sources: `filesystem:ci-config`

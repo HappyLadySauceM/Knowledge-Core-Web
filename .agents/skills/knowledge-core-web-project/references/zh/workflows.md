@@ -53,6 +53,7 @@ Lint、类型检查、单元测试、生产构建、e2e、Storybook、Docker 构
 状态：`verified`
 
 - `.github/workflows/feishu-notify.yml`
+- `.github/workflows/maintenance.yml`
 - `.github/workflows/pipeline.yml`
 
 来源： `filesystem:ci-config`

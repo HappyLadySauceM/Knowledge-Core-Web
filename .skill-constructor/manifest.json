@@ -272,7 +272,7 @@
     },
     {
       "id": "cicd.config-files",
-      "revision": 54,
+      "revision": 74,
       "section": "workflows",
       "sources": [
         {
@@ -281,9 +281,10 @@
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-09-02T17:03:24Z",
+      "updatedAt": "2026-09-21T15:21:24Z",
       "value": [
         ".github/workflows/feishu-notify.yml",
+        ".github/workflows/maintenance.yml",
         ".github/workflows/pipeline.yml"
       ]
     },
@@ -573,21 +574,21 @@
     },
     {
       "id": "security.secrets-and-config",
-      "revision": 67,
+      "revision": 74,
       "section": "conventions",
       "sources": [
         {
-          "detail": "evidence-sha256:f4d8f7b40bba37710937fa8c56ba7984527c134290f0fd2a992bcdcf928a2099",
+          "detail": "evidence-sha256:59a335d21e5b0f82fa627e9b32a17a6bf0112468a1de86830d1a40bd3bd860ad",
           "kind": "documented",
           "reference": "README.md#section"
         },
         {
-          "detail": "evidence-sha256:f4d8f7b40bba37710937fa8c56ba7984527c134290f0fd2a992bcdcf928a2099",
+          "detail": "evidence-sha256:59a335d21e5b0f82fa627e9b32a17a6bf0112468a1de86830d1a40bd3bd860ad",
           "kind": "documented",
           "reference": "docs/README.md#section"
         },
         {
-          "detail": "evidence-sha256:f4d8f7b40bba37710937fa8c56ba7984527c134290f0fd2a992bcdcf928a2099",
+          "detail": "evidence-sha256:59a335d21e5b0f82fa627e9b32a17a6bf0112468a1de86830d1a40bd3bd860ad",
           "kind": "documented",
           "reference": "docs/technical-plan.md#section"
         },
@@ -597,7 +598,7 @@
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-09-21T05:05:46Z",
+      "updatedAt": "2026-09-21T15:21:24Z",
       "value": "Inject secrets through GitHub or Kubernetes Secrets only; do not commit plaintext secrets. Authentication cookies are HttpOnly, Secure when the request is HTTPS, and use SameSite Lax for access and Strict for refresh. Logs, metrics, and client bundles must not contain session credentials."
     },
     {
@@ -825,11 +826,11 @@
     "profile": "generic",
     "slug": "knowledge-core-web"
   },
-  "revision": 73,
+  "revision": 74,
   "scan": {
-    "fingerprint": "6a6b32c0581fed9de707d0e92c817c43405f7fddd0903f6846756a13f055f088",
-    "inventoryCount": 171
+    "fingerprint": "fbc2c43f8aa8553468d20951cb1f51e3d1946c0d75dec38a122fd6322b619c28",
+    "inventoryCount": 172
   },
   "schemaVersion": 3,
-  "updatedAt": "2026-09-21T13:07:40Z"
+  "updatedAt": "2026-09-21T15:21:24Z"
 }

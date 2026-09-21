@@ -31,10 +31,10 @@
       "zhDigest": "26982513855c1ec4fc62de30a91ee036bfbc3e056501f42f7f7bb9feb01d41b0"
     },
     "workflows": {
-      "enDigest": "dd7b2717b3c7509f886ccee1b715ac9e7eabae589dccd3389bd8069e41d805b4",
-      "syncedEnDigest": "dd7b2717b3c7509f886ccee1b715ac9e7eabae589dccd3389bd8069e41d805b4",
-      "syncedZhDigest": "258ba33d8d41076d6c92ba4a6e63d8b3c1a8502f3dafc5f856cdabcf94d9e787",
-      "zhDigest": "258ba33d8d41076d6c92ba4a6e63d8b3c1a8502f3dafc5f856cdabcf94d9e787"
+      "enDigest": "36e1efa93a4252272c57302a24670f317c240d73a960c270a08672c48e983040",
+      "syncedEnDigest": "36e1efa93a4252272c57302a24670f317c240d73a960c270a08672c48e983040",
+      "syncedZhDigest": "1177a3fba3ea334f1692e32f83707b509628fbc195b160a5b3e81c386bc858ab",
+      "zhDigest": "1177a3fba3ea334f1692e32f83707b509628fbc195b160a5b3e81c386bc858ab"
     }
   },
   "schemaVersion": 1,
