@@ -29,7 +29,7 @@ jobs:
         with:
           fetch-depth: 1
       - name: Prepare Harbor credentials
-        uses: HappyLadySauceM/ci-templates/.github/actions/prepare-harbor@869a505ceae8e4face5efae93682f8d4b68b21d4
+        uses: HappyLadySauceM/ci-templates/.github/actions/prepare-harbor@1185e7484dc87896f4d373afefa98cd81aa75adc
         with:
           docker-config-json: ${{ secrets.HARBOR_DOCKER_CONFIG_JSON }}
           ca-pem: ${{ secrets.HARBOR_CA_PEM }}
