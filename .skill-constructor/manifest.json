@@ -825,11 +825,11 @@
     "profile": "generic",
     "slug": "knowledge-core-web"
   },
-  "revision": 71,
+  "revision": 73,
   "scan": {
-    "fingerprint": "fb4194e5d7f4d6bf73ccb6d04367a8f4a2d6059409ccedf0f226360db5cf21d2",
-    "inventoryCount": 167
+    "fingerprint": "6a6b32c0581fed9de707d0e92c817c43405f7fddd0903f6846756a13f055f088",
+    "inventoryCount": 171
   },
   "schemaVersion": 3,
-  "updatedAt": "2026-09-21T10:24:01Z"
+  "updatedAt": "2026-09-21T13:07:40Z"
 }

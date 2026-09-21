@@ -44,12 +44,14 @@ Browser → Next.js BFF（HttpOnly cookie）→ Knowledge-Core Gateway → Ident
 - `/{locale}/login`：认证入口壳，使用公开站点 Header
 - `/`：重定向到 `/zh-CN`
 
-## 文档双状态与发布边界
+## 文档双状态、提交历史与发布边界
 
 - Collaboration 持久化唯一的实时编辑稿；Yjs/IndexedDB 与 WebSocket 重连后从服务端合并恢复，编辑内容不会直接改写公开页。
 - Knowledge 持有最近一次公开快照。首次打开“公开发布”或已发布文档点击“更新”时，Gateway 先通过 state vector 捕获已提交的 Collaboration 状态，再原子推进公开发布候选；公开列表和文章详情只读取有效快照。
 - 取消发布只撤下公开快照，完整编辑稿继续保留。回收站中的文档、取消发布中的候选、失败候选以及已标记永久删除的文档均不可通过公开 URL 访问。
-- 不提供历史版本、自动版本或版本恢复 API。回收站恢复仍是独立的软删除恢复；“永久删除”使用强 `If-Match`、`Idempotency-Key` 和不可逆确认，返回 `202` 后由后台幂等清理。
+- 编辑稿之外保留显式提交历史：手动保存、离开、发布和恢复均通过 `/studio/documents/:id/commits` 形成可查看提交；历史恢复创建新的恢复提交，不删除旧提交。提交页面只读展示时间线和快照，实时草稿仍由 Collaboration/Yjs 负责。
+- 回收站恢复仍是独立的软删除恢复；“永久删除”使用强 `If-Match`、`Idempotency-Key` 和不可逆确认，返回 `202` 后由后台幂等清理。
+- 标题、正文、摘要、标签、图标和封面焦点参与规范化 authoring hash。已发布文档只有 hash 不同才启用“更新”；草稿同步状态和历史提交状态分别显示，避免普通输入推动顶部按钮抖动。
 
 上述页面均通过同源 BFF 或服务端 Gateway client 连接真实业务 API；浏览器不持有 Gateway token。
 

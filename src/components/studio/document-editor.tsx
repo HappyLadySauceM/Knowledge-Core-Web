@@ -1,28 +1,29 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEditor } from "@tiptap/react";
 import { IndexeddbPersistence } from "y-indexeddb";
 import * as Y from "yjs";
-import { ChevronDown, Maximize2, MoreHorizontal, Settings, Share2, Trash2, X } from "lucide-react";
+import { ChevronDown, Clock3, Copy, ImagePlus, Maximize2, MoreHorizontal, Save, Settings, Share2, SmilePlus, Trash2, X } from "lucide-react";
 import { EditorCanvas } from "@/components/studio/editor-canvas";
 import { AppDialog } from "@/components/ui/dialog";
 import { documentsApi } from "@/lib/api/documents";
-import { foldersApi } from "@/lib/api/folders";
 import { membersApi } from "@/lib/api/collaboration";
 import { KnowledgeWebSocketProvider, type CollaborationSaveState, type CollaborationStatus } from "@/lib/collaboration/provider";
 import { uploadAttachmentFile } from "@/components/studio/attachment-uploader";
 import { mapPublishError, publishAfterSync, waitForPublishReady } from "@/lib/editor/publish-sync";
 import { normalizeLinkHref } from "@/lib/editor/selection-toolbar";
 import { encodeRawUrlBase64 } from "@/lib/editor/state-vector";
+import { publicationSemanticHash } from "@/lib/editor/semantic-hash";
 import { createStudioDocumentExtensions } from "@/lib/editor/studio-extensions";
 import { getMessages } from "@/lib/i18n";
 
 type EditorMenu = "share" | "more" | "mode" | null;
 type EditorMode = "edit" | "read";
 type EditorWidth = "comfortable" | "wide";
+type CommitKind = "manual" | "leave" | "publish";
 
 const persistenceFallbackMs = 5_000;
 
@@ -53,6 +54,8 @@ function sanitizeEditorError(value: string, labels: ReturnType<typeof getMessage
   return mapPublishError(new Error(value), labels);
 }
 
+const emptyTags: string[] = [];
+
 export function DocumentEditor({ documentId, locale }: { documentId: string; locale: string }) {
   return <DocumentEditorSession key={documentId} documentId={documentId} locale={locale} />;
 }
@@ -75,6 +78,10 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
   const [editorWidth, setEditorWidth] = useState<EditorWidth>("comfortable");
   const [editorWidthLoaded, setEditorWidthLoaded] = useState(false);
   const [titleOverride, setTitleOverride] = useState<string | null>(null);
+  const [summaryOverride, setSummaryOverride] = useState<string | null>(null);
+  const [tagsOverride, setTagsOverride] = useState<string[] | null>(null);
+  const [draftHash, setDraftHash] = useState<string | null>(null);
+  const [commitSaving, setCommitSaving] = useState(false);
   const [dialog, setDialog] = useState<
     | { kind: "delete-document" }
     | { kind: "add-member" }
@@ -85,17 +92,16 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
   const [dialogPending, setDialogPending] = useState(false);
   const linkRangeRef = useRef<{ from: number; to: number } | null>(null);
   const attachmentInputRef = useRef<HTMLInputElement | null>(null);
-  const attachmentKindRef = useRef<"image" | "attachment">("attachment");
+  const attachmentKindRef = useRef<"image" | "attachment" | "cover">("attachment");
   const attachmentPositionRef = useRef<number | null>(null);
-  const lastAutosaveReminderRef = useRef(0);
   const persistenceRef = useRef<{ whenSynced: Promise<unknown> } | null>(null);
   const headerRef = useRef<HTMLElement | null>(null);
+  const saveCommitRef = useRef<((kind?: CommitKind) => Promise<void>) | null>(null);
   const documentQuery = useQuery({
     queryKey: ["document", documentId],
     queryFn: () => documentsApi.get(documentId).then((value) => value.data),
     refetchInterval: (query) => (["publishing", "unpublishing"].includes(query.state.data?.publication_status ?? "") ? 2000 : false),
   });
-  const folders = useQuery({ queryKey: ["folders", "root"], queryFn: () => foldersApi.list().then((value) => value.data.items) });
   const members = useQuery({
     queryKey: ["members", documentId],
     queryFn: () => membersApi.list(documentId).then((value) => value.data.items),
@@ -191,9 +197,14 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
     // The provider is intentionally created once for this document.
   }, [documentId, sessionEpoch, t.editor]);
 
+  const canEdit = documentQuery.data?.access === "owner" || documentQuery.data?.access === "editor";
+
   useEffect(() => {
     if (!provider) return undefined;
-    const flush = () => void provider.flushOutbound().catch(() => undefined);
+    const flush = () => {
+      void provider.flushOutbound().catch(() => undefined);
+      if (canEdit) void saveCommitRef.current?.("leave");
+    };
     const flushWhenHidden = () => {
       if (document.visibilityState === "hidden") flush();
     };
@@ -203,16 +214,40 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
       document.removeEventListener("visibilitychange", flushWhenHidden);
       window.removeEventListener("pagehide", flush);
     };
-  }, [provider]);
+  }, [provider, canEdit]);
 
   useEffect(() => {
     if (modePreference === "read") void provider?.flushOutbound().catch(() => undefined);
   }, [modePreference, provider]);
 
-  const canEdit = documentQuery.data?.access === "owner" || documentQuery.data?.access === "editor";
   const writing = canEdit && modePreference === "edit" && !publishing;
   const remoteTitle = documentQuery.data?.title ?? "";
   const titleDraft = titleOverride ?? remoteTitle;
+  const summaryDraft = summaryOverride ?? documentQuery.data?.summary ?? "";
+  const tagsDraft = tagsOverride ?? documentQuery.data?.tags ?? emptyTags;
+
+  useEffect(() => {
+    if (!editor || !documentQuery.data) return undefined;
+    let active = true;
+    const refreshHash = () => {
+      void publicationSemanticHash({
+        title: titleDraft,
+        summary: summaryDraft,
+        slug: documentQuery.data?.slug ?? "",
+        language: documentQuery.data?.language,
+        tags: tagsDraft,
+        content: editor.getJSON(),
+        plainText: editor.getText(),
+        icon: documentQuery.data?.icon,
+        coverAttachmentId: documentQuery.data?.cover_attachment_id,
+        coverFocalX: documentQuery.data?.cover_focal_x,
+        coverFocalY: documentQuery.data?.cover_focal_y,
+      }).then((value) => { if (active) setDraftHash(value); });
+    };
+    refreshHash();
+    editor.on("update", refreshHash);
+    return () => { active = false; editor.off("update", refreshHash); };
+  }, [editor, documentQuery.data, summaryDraft, tagsDraft, titleDraft]);
 
   useEffect(() => {
     editor?.setEditable(writing);
@@ -223,15 +258,11 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
       if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "s") return;
       event.preventDefault();
       event.stopPropagation();
-      const now = Date.now();
-      if (now - lastAutosaveReminderRef.current < 30_000) return;
-      lastAutosaveReminderRef.current = now;
-      setAutosaveNotice(t.editor.autosaveReminder);
-      window.setTimeout(() => setAutosaveNotice(""), 2_400);
+      void saveCommitRef.current?.("manual");
     };
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [t.editor.autosaveReminder]);
+  }, [editor, provider, canEdit, documentQuery.data, t.editor]);
 
   useEffect(() => {
     if (!editorWidthLoaded) return;
@@ -259,7 +290,10 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
     setPublishing(true);
     setError("");
     try {
-      if (!metadataRevision) throw new Error("metadata");
+      const metadata = await flushPendingMetadata();
+      const currentDocument = metadata ?? documentQuery.data;
+      if (!currentDocument) throw new Error("metadata");
+      await saveCommit("publish");
       const idempotencyKey = crypto.randomUUID();
       const result = await publishAfterSync({
         wait: () => waitForPublishReady({
@@ -271,7 +305,12 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
           if (!doc) throw new Error("Collaboration is not ready");
           return encodeRawUrlBase64(Y.encodeStateVector(doc));
         },
-        publish: (stateVector) => documentsApi.publish(documentId, metadataRevision, stateVector, idempotencyKey).then((value) => value.data),
+        publish: (stateVector) => documentsApi.publish(documentId, currentDocument.metadata_revision, stateVector, idempotencyKey, {
+          icon: currentDocument.icon,
+          cover_attachment_id: currentDocument.cover_attachment_id,
+          cover_focal_x: currentDocument.cover_focal_x,
+          cover_focal_y: currentDocument.cover_focal_y,
+        }).then((value) => value.data),
         flushAndSync: () => provider?.flushAndSync() ?? Promise.reject(new Error("Collaboration is not ready")),
       });
       queryClient.setQueryData(["document", documentId], result);
@@ -282,6 +321,56 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
       setPublishing(false);
     }
   }
+
+  async function flushPendingMetadata() {
+    if (!documentQuery.data || !canEdit) return null;
+    const body: Parameters<typeof documentsApi.update>[2] = {};
+    if (titleOverride !== null && titleOverride.trim() && titleOverride.trim() !== remoteTitle) body.title = titleOverride.trim();
+    if (summaryOverride !== null && summaryOverride.trim() !== (documentQuery.data.summary ?? "")) body.summary = summaryOverride.trim();
+    if (tagsOverride !== null && JSON.stringify(tagsOverride) !== JSON.stringify(documentQuery.data.tags ?? [])) body.tags = tagsOverride;
+    if (Object.keys(body).length === 0) return null;
+    const result = await documentsApi.update(documentId, documentQuery.data.metadata_revision, body);
+    queryClient.setQueryData(["document", documentId], result.data);
+    setTitleOverride(null);
+    setSummaryOverride(null);
+    setTagsOverride(null);
+    return result.data;
+  }
+
+  async function saveCommit(kind: CommitKind = "manual") {
+    if (!editor || !documentQuery.data || !canEdit || commitSaving) {
+      if (kind === "manual") {
+        setAutosaveNotice(t.editor.autosaveReminder);
+        window.setTimeout(() => setAutosaveNotice(""), 2_400);
+      }
+      return;
+    }
+    setCommitSaving(true);
+    try {
+      await provider?.flushAndSync();
+      const content = editor.getJSON();
+      const plainText = editor.getText();
+      const contentHash = await publicationSemanticHash({
+        title: titleDraft, summary: summaryDraft, slug: documentQuery.data.slug,
+        language: documentQuery.data.language, tags: tagsDraft, content, plainText,
+        icon: documentQuery.data.icon, coverAttachmentId: documentQuery.data.cover_attachment_id,
+        coverFocalX: documentQuery.data.cover_focal_x, coverFocalY: documentQuery.data.cover_focal_y,
+      });
+      await documentsApi.commits.create(documentId, {
+        kind, label: kind === "publish" ? t.editor.publishCommit : t.editor.manualCommit,
+        content_hash: contentHash, content, plain_text: plainText,
+      });
+      setAutosaveNotice(t.editor.commitSaved);
+      window.setTimeout(() => setAutosaveNotice(""), 1_800);
+      setError("");
+    } catch (reason) {
+      setError(reason instanceof Error ? sanitizeEditorError(reason.message, t.editor) : t.editor.commitFailed);
+    } finally {
+      setCommitSaving(false);
+    }
+  }
+
+  saveCommitRef.current = saveCommit;
 
   async function unpublish() {
     if (!metadataRevision) return;
@@ -318,23 +407,33 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
     }
   }
 
-  async function saveMetadata(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!documentQuery.data) return;
-    const form = new FormData(event.currentTarget);
+  async function saveInlineMetadata(body: Parameters<typeof documentsApi.update>[2]) {
+    if (!documentQuery.data || !canEdit) return;
     try {
-      const result = await documentsApi.update(documentId, documentQuery.data.metadata_revision, {
-        summary: String(form.get("summary") ?? ""),
-        slug: String(form.get("slug") ?? ""),
-        language: String(form.get("language") ?? ""),
-        tags: String(form.get("tags") ?? "").split(",").map((item) => item.trim()).filter(Boolean),
-        folder_id: String(form.get("folder_id") ?? ""),
-      });
+      const result = await documentsApi.update(documentId, documentQuery.data.metadata_revision, body);
       queryClient.setQueryData(["document", documentId], result.data);
       setError("");
     } catch (reason) {
       setError(reason instanceof Error ? sanitizeEditorError(reason.message, t.editor) : t.editor.updateFailed);
     }
+  }
+
+  async function saveSummary() {
+    await saveInlineMetadata({ summary: summaryDraft.trim() });
+    setSummaryOverride(null);
+  }
+
+  async function saveTags() {
+    await saveInlineMetadata({ tags: tagsDraft });
+    setTagsOverride(null);
+  }
+
+  async function saveIcon(value: string) {
+    await saveInlineMetadata({ icon: value.trim().slice(0, 8) });
+  }
+
+  async function removeCover() {
+    await saveInlineMetadata({ cover_attachment_id: "" });
   }
 
   async function changeMember(userId: string, revision: number, role: "viewer" | "editor") {
@@ -363,7 +462,7 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
     setDialog({ kind: "set-link", href: String(editor.getAttributes("link").href ?? "") });
   }
 
-  function requestAttachment(kind: "image" | "attachment") {
+  function requestAttachment(kind: "image" | "attachment" | "cover") {
     if (!writing) return;
     attachmentKindRef.current = kind;
     attachmentPositionRef.current = editor?.state.selection.from ?? null;
@@ -380,6 +479,12 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
       const kind = attachmentKindRef.current;
       const position = attachmentPositionRef.current;
       attachmentPositionRef.current = null;
+      if (kind === "cover") {
+        if (!documentQuery.data) return;
+        const result = await documentsApi.update(documentId, documentQuery.data.metadata_revision, { cover_attachment_id: attachment.id, cover_focal_x: 50, cover_focal_y: 50 });
+        queryClient.setQueryData(["document", documentId], result.data);
+        return;
+      }
       const chain = editor.chain().focus();
       if (position !== null) chain.setTextSelection(position);
       chain.insertContent({
@@ -464,7 +569,14 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
   // Publication is a document action, not an editing-mode action. Owners and
   // editors may publish/update from the mode menu even while they are reading.
   const publishDisabled = publishing || publicationPending || !canEdit || !collaborationReady;
-  const publishLabel = publishing || publicationStatus === "publishing" ? t.editor.publishing : t.editor.update;
+  const publicationChanged = documentQuery.data?.published
+    ? documentQuery.data.publication_hash
+      ? draftHash !== null && draftHash !== documentQuery.data.publication_hash
+      : true
+    : false;
+  const publishLabel = publishing || publicationStatus === "publishing"
+    ? t.editor.publishing
+    : publicationChanged ? t.editor.update : t.editor.alreadyLatest;
 
   return (
     <>
@@ -477,6 +589,12 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
         />
         <span className="editor-autosave-status" role="status" aria-live="polite">{autosaveStatus}</span>
         <div className="editor-header-actions">
+          {canEdit ? (
+            <button type="button" className="editor-commit-button" onClick={() => void saveCommit("manual")} disabled={commitSaving || !editor || status === "offline"}>
+              <Save size={14} />
+              {commitSaving ? t.editor.savingCommit : t.common.save}
+            </button>
+          ) : null}
           {documentQuery.data?.access === "owner" ? (
             <div className="editor-popover-wrap">
               <button
@@ -541,11 +659,15 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
               <MoreHorizontal size={16} />
             </button>
             {menu === "more" ? (
-              <div className="editor-popover" role="menu">
-                <button type="button" role="menuitem" onClick={() => { setPanel(panel === "settings" ? null : "settings"); setMenu(null); }}>
-                  <Settings size={14} />
-                  {t.studio.documentSettings}
-                </button>
+              <div className="editor-popover editor-more-popover" role="menu">
+                <div className="editor-menu-group"><span>{t.editor.pageTools}</span>
+                  <button type="button" role="menuitem" onClick={() => { setEditorWidth(editorWidth === "wide" ? "comfortable" : "wide"); setMenu(null); }}><Maximize2 size={14} />{t.editor.pageLayout}</button>
+                </div>
+                <div className="editor-menu-group"><span>{t.editor.documentTools}</span>
+                  <button type="button" role="menuitem" onClick={() => { router.push(`/${locale}/studio/documents/${documentId}/history`); setMenu(null); }}><Clock3 size={14} />{t.editor.history}</button>
+                  <button type="button" role="menuitem" onClick={() => { setPanel("settings"); setMenu(null); }}><Settings size={14} />{t.studio.documentSettings}</button>
+                  <button type="button" role="menuitem" onClick={() => setMenu(null)}><Copy size={14} />{t.editor.copyToKnowledgeBase}</button>
+                </div>
               </div>
             ) : null}
             {panel ? (
@@ -555,17 +677,8 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
                   <button type="button" className="editor-panel-close" aria-label={t.editor.closePanel} onClick={() => setPanel(null)}><X size={15} /></button>
                 </div>
                 {panel === "settings" && documentQuery.data ? (
-                  <form onSubmit={saveMetadata}>
-                    <label>{t.studio.summary}<textarea name="summary" defaultValue={documentQuery.data.summary} maxLength={1000} /></label>
-                    <label>{t.studio.slug}<input name="slug" defaultValue={documentQuery.data.slug} /></label>
-                    <label>{t.studio.language}<input name="language" defaultValue={documentQuery.data.language} /></label>
-                    <label>{t.studio.tags}<input name="tags" defaultValue={documentQuery.data.tags?.join(", ")} /></label>
-                    <label>{t.studio.folder}
-                      <select name="folder_id" defaultValue={documentQuery.data.folder_id}>
-                        <option value="">{t.studio.noFolder}</option>
-                        {folders.data?.map((folder) => <option value={folder.id} key={folder.id}>{folder.name}</option>)}
-                      </select>
-                    </label>
+                  <div className="editor-settings-summary">
+                    <p>{t.editor.inlineMetadataHint}</p>
                     <div className="editor-width-control">
                       <span>{t.editor.editorWidth}</span>
                       <div role="group" aria-label={t.editor.editorWidth}>
@@ -573,12 +686,11 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
                         <button type="button" className={editorWidth === "wide" ? "is-selected" : ""} onClick={() => setEditorWidth("wide")}><Maximize2 size={14} />{t.editor.widthWide}</button>
                       </div>
                     </div>
-                    <button type="submit">{t.studio.saveMetadata}</button>
                     <button className="danger-button" type="button" onClick={() => setDialog({ kind: "delete-document" })}>
                       <Trash2 size={14} />
                       {t.studio.deleteDocument}
                     </button>
-                  </form>
+                  </div>
                 ) : null}
               </div>
             ) : null}
@@ -587,7 +699,7 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
             <button type="button" onClick={() => { setError(""); provider.retry(); }}>{t.common.retry}</button>
           ) : null}
           {documentQuery.data?.published ? (
-            <button type="button" className="editor-publish-button" onClick={() => void publish()} disabled={publishDisabled}>
+            <button type="button" className="editor-publish-button" onClick={() => void publish()} disabled={publishDisabled || !publicationChanged}>
               {publishLabel}
             </button>
           ) : null}
@@ -607,7 +719,27 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
               onChange={(event) => setTitleOverride(event.target.value)}
               onBlur={() => void saveTitle()}
             />
+            <div className="document-editor-title-tools">
+              <button type="button" className="editor-inline-tool" aria-label={t.editor.addIcon} onClick={() => {
+                const value = window.prompt(t.editor.iconPrompt, documentQuery.data?.icon ?? "");
+                if (value !== null) void saveIcon(value);
+              }} disabled={!writing}>
+                {documentQuery.data?.icon || <SmilePlus size={14} />}
+              </button>
+              {!documentQuery.data?.cover_attachment_id ? (
+                <button type="button" className="editor-inline-tool" onClick={() => requestAttachment("cover")} disabled={!writing}><ImagePlus size={14} />{t.editor.addCover}</button>
+              ) : (
+                <button type="button" className="editor-inline-tool" onClick={() => void removeCover()} disabled={!writing}>{t.editor.removeCover}</button>
+              )}
+            </div>
+            {documentQuery.data?.cover_attachment_id ? (
+              <div className="document-editor-cover"><img src={`/api/bff/gateway/api/v1/attachments/${encodeURIComponent(documentQuery.data.cover_attachment_id)}/content`} alt="" style={{ objectPosition: `${documentQuery.data.cover_focal_x ?? 50}% ${documentQuery.data.cover_focal_y ?? 50}%` }} /></div>
+            ) : null}
             <p className="document-editor-byline">{byline}</p>
+            <div className="document-editor-inline-metadata">
+              {writing || summaryDraft ? <input value={summaryDraft} placeholder={t.editor.addSummary} maxLength={1000} onChange={(event) => setSummaryOverride(event.target.value)} onBlur={() => void saveSummary()} aria-label={t.editor.addSummary} /> : <button type="button" onClick={() => setSummaryOverride("")} disabled={!writing}>{t.editor.addSummary}</button>}
+              {writing || tagsDraft.length > 0 ? <input value={tagsDraft.join(", ")} placeholder={t.editor.addTags} onChange={(event) => setTagsOverride(event.target.value.split(",").map((item) => item.trim()).filter(Boolean))} onBlur={() => void saveTags()} aria-label={t.editor.addTags} /> : <button type="button" onClick={() => setTagsOverride([])} disabled={!writing}>{t.editor.addTags}</button>}
+            </div>
             <div className="document-editor-comment-gutter" aria-hidden="true" />
             <EditorCanvas editor={editor} locale={locale} onRequestLink={requestLink} onRequestAttachment={requestAttachment} />
           </div>
