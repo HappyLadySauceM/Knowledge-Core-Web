@@ -6,12 +6,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEditor } from "@tiptap/react";
 import { IndexeddbPersistence } from "y-indexeddb";
 import * as Y from "yjs";
-import { ChevronDown, History, Maximize2, MoreHorizontal, Settings, Share2, Trash2, X } from "lucide-react";
+import { ChevronDown, Maximize2, MoreHorizontal, Settings, Share2, Trash2, X } from "lucide-react";
 import { EditorCanvas } from "@/components/studio/editor-canvas";
 import { AppDialog } from "@/components/ui/dialog";
 import { documentsApi } from "@/lib/api/documents";
 import { foldersApi } from "@/lib/api/folders";
-import { membersApi, versionsApi } from "@/lib/api/collaboration";
+import { membersApi } from "@/lib/api/collaboration";
 import { KnowledgeWebSocketProvider, type CollaborationStatus } from "@/lib/collaboration/provider";
 import { uploadAttachmentFile } from "@/components/studio/attachment-uploader";
 import { mapPublishError, publishAfterSync, waitForPublishReady } from "@/lib/editor/publish-sync";
@@ -20,9 +20,26 @@ import { encodeRawUrlBase64 } from "@/lib/editor/state-vector";
 import { createStudioDocumentExtensions } from "@/lib/editor/studio-extensions";
 import { getMessages } from "@/lib/i18n";
 
-type EditorMenu = "share" | "more" | null;
+type EditorMenu = "share" | "more" | "mode" | null;
 type EditorMode = "edit" | "read";
 type EditorWidth = "comfortable" | "wide";
+
+const persistenceFallbackMs = 5_000;
+
+function waitForPersistence(persistence: IndexeddbPersistence | null): Promise<void> {
+  if (!persistence) return Promise.resolve();
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      resolve();
+    };
+    const timer = window.setTimeout(finish, persistenceFallbackMs);
+    persistence.whenSynced.then(finish, finish);
+  });
+}
 
 function collaborationLabel(
   status: CollaborationStatus,
@@ -51,7 +68,7 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState("");
   const [autosaveNotice, setAutosaveNotice] = useState("");
-  const [panel, setPanel] = useState<"settings" | "versions" | null>(null);
+  const [panel, setPanel] = useState<"settings" | null>(null);
   const [menu, setMenu] = useState<EditorMenu>(null);
   const [modePreference, setModePreference] = useState<EditorMode>("edit");
   const [editorWidth, setEditorWidth] = useState<EditorWidth>("comfortable");
@@ -61,7 +78,6 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
     | { kind: "delete-document" }
     | { kind: "add-member" }
     | { kind: "remove-member"; userId: string; revision: number; name: string }
-    | { kind: "restore-version"; versionId: string; sequence: number }
     | { kind: "set-link"; href: string }
     | null
   >(null);
@@ -83,11 +99,6 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
     queryKey: ["members", documentId],
     queryFn: () => membersApi.list(documentId).then((value) => value.data.items),
     enabled: menu === "share",
-  });
-  const versions = useQuery({
-    queryKey: ["versions", documentId],
-    queryFn: () => versionsApi.list(documentId).then((value) => value.data),
-    enabled: panel === "versions",
   });
   const metadataRevision = documentQuery.data?.metadata_revision;
   // TipTap 3 requires a schema top node (`doc`); never pass an empty extensions array.
@@ -122,9 +133,16 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
     let active = true;
     const ydoc = new Y.Doc();
     let currentProvider: KnowledgeWebSocketProvider | null = null;
-    const persistence = new IndexeddbPersistence(`knowledge-core:${documentId}`, ydoc);
-    persistenceRef.current = persistence;
-    void persistence.whenSynced.then(async () => {
+    let persistence: IndexeddbPersistence | null = null;
+    try {
+      persistence = new IndexeddbPersistence(`knowledge-core:${documentId}`, ydoc);
+    } catch {
+      // Private browsing and restricted storage can make IndexedDB unavailable.
+      // The server-backed Y.Doc remains authoritative in that case.
+    }
+    const persistenceSynced = waitForPersistence(persistence);
+    persistenceRef.current = { whenSynced: persistenceSynced };
+    void persistenceSynced.then(async () => {
       try {
         if (!active) return;
         const nextProvider = new KnowledgeWebSocketProvider(
@@ -137,7 +155,8 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
               if (!active || closeCode !== 4409) return;
               setStatus("offline");
               setError(t.editor.documentRestored);
-              void persistence.clearData().then(() => {
+              const reset = persistence?.clearData() ?? Promise.resolve();
+              void reset.then(() => {
                 if (active) {
                   setDoc(null);
                   setProvider(null);
@@ -163,7 +182,7 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
     return () => {
       active = false;
       currentProvider?.destroy();
-      persistence.destroy();
+      persistence?.destroy();
       ydoc.destroy();
       persistenceRef.current = null;
     };
@@ -352,8 +371,8 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
     }
   }
 
-  // Confirm member/version/trash actions through AppDialog; cancel must not hit Gateway.
-  // 成员/版本/删除走 AppDialog 确认；取消时不得调用 Gateway。
+  // Confirm member/trash actions through AppDialog; cancel must not hit Gateway.
+  // 成员/删除走 AppDialog 确认；取消时不得调用 Gateway。
   async function confirmDialog(value: string) {
     if (!dialog || dialogPending) return;
     if (dialog.kind === "set-link") {
@@ -382,18 +401,6 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
         await membersApi.remove(documentId, dialog.userId, dialog.revision);
         await members.refetch();
       }
-      if (dialog.kind === "restore-version") {
-        await waitForPublishReady({
-          persistenceSynced: persistenceRef.current?.whenSynced ?? Promise.reject(new Error("Collaboration is not ready")),
-          provider,
-        });
-        await provider?.flushAndSync();
-        const refreshed = await versions.refetch();
-        const expectedSequence = refreshed.data?.head_sequence ?? dialog.sequence;
-        await versionsApi.restore(documentId, dialog.versionId, expectedSequence, crypto.randomUUID());
-        window.location.reload();
-        return;
-      }
       setDialog(null);
     } catch (reason) {
       setError(reason instanceof Error ? sanitizeEditorError(reason.message, t.editor) : t.editor.requestFailed);
@@ -406,16 +413,23 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
   const publicationPending = publicationStatus === "publishing" || publicationStatus === "unpublishing";
   const synced = Boolean(provider?.isSynced);
   const statusText = canEdit ? collaborationLabel(status, t.editor) : t.editor.readOnly;
+  const autosaveStatus = !canEdit
+    ? t.editor.readOnly
+    : status === "offline"
+      ? t.editor.offlinePending
+      : synced && status === "connected"
+        ? t.editor.saved
+        : t.editor.saving;
   const visibleError = sanitizeEditorError(error || documentQuery.data?.publication_error || "", t.editor);
   const ownerName = documentQuery.data?.owner.username ?? "";
   const updatedAt = documentQuery.data?.updated_at
     ? new Date(documentQuery.data.updated_at).toLocaleString(locale)
     : "";
   const byline = t.editor.byline.replace("{author}", ownerName).replace("{time}", updatedAt);
-  const publishDisabled = publishing || publicationPending || !canEdit || !synced || !writing;
-  const publishLabel = documentQuery.data?.published
-    ? t.editor.unpublish
-    : (publishing || publicationStatus === "publishing" ? t.editor.publishing : t.editor.publish);
+  // Publication is a document action, not an editing-mode action. Owners and
+  // editors may publish/update from the mode menu even while they are reading.
+  const publishDisabled = publishing || publicationPending || !canEdit || !synced;
+  const publishLabel = publishing || publicationStatus === "publishing" ? t.editor.publishing : t.editor.update;
 
   return (
     <>
@@ -426,6 +440,7 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
           title={statusText}
           aria-label={statusText}
         />
+        <span className="editor-autosave-status" role="status" aria-live="polite">{autosaveStatus}</span>
         <div className="editor-header-actions">
           {documentQuery.data?.access === "owner" ? (
             <div className="editor-popover-wrap">
@@ -460,19 +475,23 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
               ) : null}
             </div>
           ) : null}
-          <label className="editor-mode-control">
-            <span className="visually-hidden">{t.editor.mode}</span>
-            <select
-              aria-label={t.editor.mode}
-              value={writing ? "edit" : "read"}
-              disabled={!canEdit}
-              onChange={(event) => setModePreference(event.target.value as EditorMode)}
-            >
-              <option value="edit">{t.editor.editMode}</option>
-              <option value="read">{t.editor.readMode}</option>
-            </select>
-            <ChevronDown size={14} aria-hidden="true" />
-          </label>
+          <div className="editor-popover-wrap editor-mode-control">
+            <button type="button" aria-label={t.editor.mode} aria-haspopup="menu" aria-expanded={menu === "mode"} disabled={!canEdit} onClick={() => { setPanel(null); setMenu(menu === "mode" ? null : "mode"); }}>
+              {writing ? t.editor.editMode : t.editor.readMode}<ChevronDown size={14} aria-hidden="true" />
+            </button>
+            {menu === "mode" ? (
+              <div className="editor-popover editor-mode-popover" role="menu">
+                <button type="button" role="menuitemradio" aria-checked={modePreference === "edit"} onClick={() => { setModePreference("edit"); setMenu(null); }}>{t.editor.editMode}</button>
+                <button type="button" role="menuitemradio" aria-checked={modePreference === "read"} onClick={() => { setModePreference("read"); setMenu(null); }}>{t.editor.readMode}</button>
+                <div className="editor-publication-toggle">
+                  <span>{documentQuery.data?.published ? t.editor.publishedVisibility : t.editor.publishVisibility}</span>
+                  <button type="button" role="switch" aria-checked={Boolean(documentQuery.data?.published)} disabled={publishing || publicationPending || !canEdit || !synced} onClick={() => void (documentQuery.data?.published ? unpublish() : publish())}>
+                    {documentQuery.data?.published ? t.editor.unpublish : t.editor.publish}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </div>
           <div className="editor-popover-wrap editor-panel-anchor">
             <button type="button" aria-label={t.editor.more} aria-expanded={menu === "more"} onClick={() => { setPanel(null); setMenu(menu === "more" ? null : "more"); }}>
               <MoreHorizontal size={16} />
@@ -483,16 +502,12 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
                   <Settings size={14} />
                   {t.studio.documentSettings}
                 </button>
-                <button type="button" role="menuitem" onClick={() => { setPanel(panel === "versions" ? null : "versions"); setMenu(null); }}>
-                  <History size={14} />
-                  {t.studio.versionHistory}
-                </button>
               </div>
             ) : null}
             {panel ? (
-              <div className="editor-popover editor-panel editor-floating-panel" role="region" aria-label={panel === "settings" ? t.studio.documentSettings : t.studio.versionHistory}>
+              <div className="editor-popover editor-panel editor-floating-panel" role="region" aria-label={t.studio.documentSettings}>
                 <div className="editor-panel-head">
-                  <h2>{panel === "settings" ? t.studio.documentSettings : t.studio.versionHistory}</h2>
+                  <h2>{t.studio.documentSettings}</h2>
                   <button type="button" className="editor-panel-close" aria-label={t.editor.closePanel} onClick={() => setPanel(null)}><X size={15} /></button>
                 </div>
                 {panel === "settings" && documentQuery.data ? (
@@ -521,21 +536,6 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
                     </button>
                   </form>
                 ) : null}
-                {panel === "versions" ? (
-                  <div>
-                    <div className="editor-panel-subhead"><span>{t.studio.versionHistory}</span><span className="editor-panel-note">{t.editor.autosaveOnly}</span></div>
-                    {versions.data?.items.map((version) => (
-                      <article className="panel-row" key={version.id}>
-                        <div>
-                          <strong>{version.label || version.kind}</strong>
-                          <span>#{version.sequence} · {new Date(version.created_at).toLocaleString(locale)}</span>
-                        </div>
-                        {canEdit ? <button type="button" onClick={() => setDialog({ kind: "restore-version", versionId: version.id, sequence: version.sequence })}>{t.studio.restore}</button> : null}
-                      </article>
-                    ))}
-                    {versions.data?.items.length === 0 ? <p className="editor-panel-note">{t.editor.autosavePending}</p> : null}
-                  </div>
-                ) : null}
               </div>
             ) : null}
           </div>
@@ -543,14 +543,10 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
             <button type="button" onClick={() => { setError(""); provider.retry(); }}>{t.common.retry}</button>
           ) : null}
           {documentQuery.data?.published ? (
-            <button type="button" className="editor-publish-button" onClick={() => void unpublish()} disabled={publishing || publicationPending || !canEdit}>
-              {publicationStatus === "unpublishing" ? t.editor.unpublishing : t.editor.unpublish}
-            </button>
-          ) : (
             <button type="button" className="editor-publish-button" onClick={() => void publish()} disabled={publishDisabled}>
               {publishLabel}
             </button>
-          )}
+          ) : null}
         </div>
       </header>
       <div className="editor-layout">
@@ -576,14 +572,14 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
       {autosaveNotice ? <div className="editor-autosave-toast" role="status" aria-live="polite">{autosaveNotice}</div> : null}
       <input ref={attachmentInputRef} type="file" hidden accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip" onChange={(event) => void insertAttachment(event)} />
       <AppDialog
-        key={dialog?.kind === "remove-member" ? `remove-${dialog.userId}` : dialog?.kind === "restore-version" ? `restore-${dialog.versionId}` : dialog?.kind === "set-link" ? "set-link" : dialog?.kind}
+        key={dialog?.kind === "remove-member" ? `remove-${dialog.userId}` : dialog?.kind === "set-link" ? "set-link" : dialog?.kind}
         open={Boolean(dialog)}
-        title={dialog?.kind === "add-member" ? t.studio.addMember : dialog?.kind === "remove-member" ? t.studio.removeMember : dialog?.kind === "restore-version" ? t.studio.restoreVersion : dialog?.kind === "set-link" ? t.editor.linkTitle : t.studio.deleteDocument}
-        description={dialog?.kind === "remove-member" ? t.studio.removeMemberBody.replace("{name}", dialog.name) : dialog?.kind === "restore-version" ? t.studio.restoreVersionBody : dialog?.kind === "delete-document" ? t.studio.deleteDocumentBody.replace("{name}", documentQuery.data?.title ?? "") : undefined}
+        title={dialog?.kind === "add-member" ? t.studio.addMember : dialog?.kind === "remove-member" ? t.studio.removeMember : dialog?.kind === "set-link" ? t.editor.linkTitle : t.studio.deleteDocument}
+        description={dialog?.kind === "remove-member" ? t.studio.removeMemberBody.replace("{name}", dialog.name) : dialog?.kind === "delete-document" ? t.studio.deleteDocumentBody.replace("{name}", documentQuery.data?.title ?? "") : undefined}
         inputLabel={dialog?.kind === "add-member" ? t.studio.memberUsername : dialog?.kind === "set-link" ? t.editor.linkUrl : undefined}
         inputDefault={dialog?.kind === "set-link" ? dialog.href : undefined}
         inputRequired={dialog?.kind === "add-member" || dialog?.kind === "set-link"}
-        confirmLabel={dialogPending ? t.common.working : dialog?.kind === "add-member" ? t.common.create : dialog?.kind === "restore-version" ? t.studio.restore : dialog?.kind === "set-link" ? t.editor.linkApply : t.common.confirm}
+        confirmLabel={dialogPending ? t.common.working : dialog?.kind === "add-member" ? t.common.create : dialog?.kind === "set-link" ? t.editor.linkApply : t.common.confirm}
         cancelLabel={t.common.cancel}
         pending={dialogPending}
         onClose={closeDialog}

@@ -21,7 +21,11 @@ export async function apiRequest<T>(path: string, schema: ZodType<T>, init?: Req
     if (response.status === 401 && typeof window !== "undefined") window.dispatchEvent(new Event("knowledge-core:unauthorized"));
     throw new ApiError(response.status, problem, response.headers.get("retry-after") ?? undefined);
   }
-  const data = response.status === 204 ? undefined : schema.parse(await response.json());
+  // 202 responses such as permanent deletion may intentionally have no body;
+  // keep the typed client tolerant of an empty success payload while still
+  // validating any JSON body that is present.
+  const body = response.status === 204 ? "" : await response.text();
+  const data = body.trim() === "" ? undefined : schema.parse(JSON.parse(body));
   return { data: data as T, etag: response.headers.get("etag") ?? undefined, location: response.headers.get("location") ?? undefined };
 }
 

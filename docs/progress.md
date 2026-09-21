@@ -14,8 +14,8 @@ Studio 文档画布在段落开头输入 `/` 可打开 slash 菜单（标题、�
 
 ### 已完成
 
-- 建立 documents、folders、members、versions、media 与 admin 领域客户端和 Zod 响应契约。
-- 完成 Studio 文档、文件夹、回收站、成员、版本、发布与实时协作入口。
+- 建立 documents、folders、members、media 与 admin 领域客户端和 Zod 响应契约。
+- 完成 Studio 文档、文件夹、回收站、永久删除、成员、双状态发布与实时协作入口。
 - 完成通用媒体库 multipart 上传、状态筛选、下载、回收和恢复。
 - 完成 site、email、ai 管理配置及 revision delivery 状态展示。
 - 收紧 BFF 注册凭证、账号停用 Cookie 清理和附件 303 转发行为。
@@ -114,13 +114,13 @@ Knowledge-Core-Web: pnpm build-storybook 通过
 ### 已完成
 
 - Knowledge 增加语言、个人文件夹、标签、公开发布快照和公开附件引用迁移；已有已发布文档兼容回填。
-- 发布接口改为 Gateway 编排 Collaboration 版本与 Knowledge 快照写入，重复请求使用 Idempotency-Key 安全重试。
+- 发布接口改为 Gateway 从 Collaboration 捕获无历史记录的实时快照并写入 Knowledge，重复请求使用 Idempotency-Key 安全重试。
 - Studio 文档列表、文件夹列表、文档更新元数据和公开文章页接入 BFF/Gateway。
 - 公开首页读取已发布集合，文章页提供 canonical、description、OpenGraph 基础 SEO，增加 locale RSS 输出。
 
 ### 当前限制
 
-- 当前发布 HTTP 契约接收并校验 Yjs state vector，但 Collaboration 快照 RPC 仍使用现有版本接口；严格 state-vector 相等前置条件、Tiptap/Yjs 编辑器、媒体上传、作者页和归档筛选列入下一批。
+- 当前发布 HTTP 契约接收并校验 Yjs state vector，Collaboration 通过无历史记录的快照捕获 RPC 返回已提交状态；公开页只读取 Knowledge 最近公开快照。媒体上传、作者页和归档筛选列入下一批。
 - Core 全量 Go/Rust 测试、Go/Rust 生成检查和 Web typecheck/Vitest 已通过；需要在部署环境执行迁移、真实发布回放和 Playwright 用户路径。
 
 ## 2026-08-30：Web BFF 会话层整理

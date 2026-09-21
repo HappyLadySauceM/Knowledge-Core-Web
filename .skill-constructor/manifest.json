@@ -573,21 +573,21 @@
     },
     {
       "id": "security.secrets-and-config",
-      "revision": 60,
+      "revision": 67,
       "section": "conventions",
       "sources": [
         {
-          "detail": "evidence-sha256:746ac0b77850279d3fab40af4c6c906e34182f754038528ce164df8b0a43b197",
+          "detail": "evidence-sha256:f4d8f7b40bba37710937fa8c56ba7984527c134290f0fd2a992bcdcf928a2099",
           "kind": "documented",
           "reference": "README.md#section"
         },
         {
-          "detail": "evidence-sha256:746ac0b77850279d3fab40af4c6c906e34182f754038528ce164df8b0a43b197",
+          "detail": "evidence-sha256:f4d8f7b40bba37710937fa8c56ba7984527c134290f0fd2a992bcdcf928a2099",
           "kind": "documented",
           "reference": "docs/README.md#section"
         },
         {
-          "detail": "evidence-sha256:746ac0b77850279d3fab40af4c6c906e34182f754038528ce164df8b0a43b197",
+          "detail": "evidence-sha256:f4d8f7b40bba37710937fa8c56ba7984527c134290f0fd2a992bcdcf928a2099",
           "kind": "documented",
           "reference": "docs/technical-plan.md#section"
         },
@@ -597,7 +597,7 @@
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-09-14T07:13:09Z",
+      "updatedAt": "2026-09-21T05:05:46Z",
       "value": "Inject secrets through GitHub or Kubernetes Secrets only; do not commit plaintext secrets. Authentication cookies are HttpOnly, Secure when the request is HTTPS, and use SameSite Lax for access and Strict for refresh. Logs, metrics, and client bundles must not contain session credentials."
     },
     {
@@ -825,11 +825,11 @@
     "profile": "generic",
     "slug": "knowledge-core-web"
   },
-  "revision": 65,
+  "revision": 69,
   "scan": {
-    "fingerprint": "2e0a17928b421983902c4cc21639a4128e5d659085b10f159110a9b7bb3002c4",
-    "inventoryCount": 159
+    "fingerprint": "2e2966f939a330e41aa739338c7a4b4cdca3a68cb81d032ea3d93c88735258df",
+    "inventoryCount": 166
   },
   "schemaVersion": 3,
-  "updatedAt": "2026-09-14T07:43:27Z"
+  "updatedAt": "2026-09-21T05:33:57Z"
 }

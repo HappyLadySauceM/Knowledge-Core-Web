@@ -36,13 +36,20 @@ Browser → Next.js BFF（HttpOnly cookie）→ Knowledge-Core Gateway → Ident
 
 - `/{locale}`：产品首页与视觉入口，使用公开站点 Header
 - `/{locale}/studio`：文档、文件夹、筛选与分页工作区，使用独立后台 Shell
-- `/{locale}/studio/documents/{id}`：Yjs 协作编辑、元数据、成员和版本，使用后台 Shell
+- `/{locale}/studio/documents/{id}`：Yjs 协作编辑、元数据、成员和双状态发布，使用后台 Shell
 - `/{locale}/studio/media`：通用媒体库，使用后台 Shell
 - `/{locale}/studio/trash`：文档回收站，使用后台 Shell
 - `/{locale}/admin`：管理员业务配置与投递状态，使用后台 Shell
 - `/{locale}/settings/security`：会话与账号安全，使用后台 Shell
 - `/{locale}/login`：认证入口壳，使用公开站点 Header
 - `/`：重定向到 `/zh-CN`
+
+## 文档双状态与发布边界
+
+- Collaboration 持久化唯一的实时编辑稿；Yjs/IndexedDB 与 WebSocket 重连后从服务端合并恢复，编辑内容不会直接改写公开页。
+- Knowledge 持有最近一次公开快照。首次打开“公开发布”或已发布文档点击“更新”时，Gateway 先通过 state vector 捕获已提交的 Collaboration 状态，再原子推进公开发布候选；公开列表和文章详情只读取有效快照。
+- 取消发布只撤下公开快照，完整编辑稿继续保留。回收站中的文档、取消发布中的候选、失败候选以及已标记永久删除的文档均不可通过公开 URL 访问。
+- 不提供历史版本、自动版本或版本恢复 API。回收站恢复仍是独立的软删除恢复；“永久删除”使用强 `If-Match`、`Idempotency-Key` 和不可逆确认，返回 `202` 后由后台幂等清理。
 
 上述页面均通过同源 BFF 或服务端 Gateway client 连接真实业务 API；浏览器不持有 Gateway token。
 

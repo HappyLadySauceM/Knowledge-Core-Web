@@ -351,8 +351,16 @@ export class KnowledgeWebSocketProvider {
   }
 
   private sendUpdate(update: Uint8Array) {
+    // A local transaction is not durably saved until the Collaboration actor
+    // accepts it and echoes the committed update back on this ordered socket.
+    // Keep the editor in an explicit saving state during that interval.
+    this.synced = false;
     const socket = this.socket;
-    if (!socket || socket.readyState !== WebSocket.OPEN) return;
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      this.setStatus("offline");
+      return;
+    }
+    this.setStatus("syncing");
     const encoder = encoding.createEncoder();
     encoding.writeVarUint(encoder, syncMessage);
     syncProtocol.writeUpdate(encoder, update);

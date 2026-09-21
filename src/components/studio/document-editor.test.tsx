@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DocumentEditor } from "@/components/studio/document-editor";
-import { membersApi, versionsApi } from "@/lib/api/collaboration";
+import { membersApi } from "@/lib/api/collaboration";
 import { documentsApi } from "@/lib/api/documents";
 import { foldersApi } from "@/lib/api/folders";
 
@@ -56,7 +56,6 @@ vi.mock("@/lib/api/folders", () => ({
 
 vi.mock("@/lib/api/collaboration", () => ({
   membersApi: { list: vi.fn(), add: vi.fn(), update: vi.fn(), remove: vi.fn() },
-  versionsApi: { list: vi.fn(), create: vi.fn(), get: vi.fn(), restore: vi.fn() },
 }));
 
 const documentSummary = {
@@ -80,16 +79,6 @@ const member = {
   revision: 4,
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",
-};
-
-const version = {
-  id: "ver_1",
-  document_id: "doc_1",
-  sequence: 2,
-  kind: "manual",
-  label: "checkpoint",
-  created_by: { id: "u1", username: "alice", avatar: "" },
-  created_at: "2026-01-02T00:00:00Z",
 };
 
 function renderEditor(locale = "en") {
@@ -120,10 +109,6 @@ describe("DocumentEditor chrome", () => {
     vi.mocked(membersApi.list).mockResolvedValue({ data: { items: [member] } });
     vi.mocked(membersApi.add).mockReset();
     vi.mocked(membersApi.remove).mockReset();
-    vi.mocked(versionsApi.list).mockResolvedValue({ data: { items: [version], page: { has_more: false } } });
-    vi.mocked(versionsApi.create).mockReset();
-    vi.mocked(versionsApi.get).mockReset();
-    vi.mocked(versionsApi.restore).mockReset();
   });
 
   afterEach(() => {
@@ -134,13 +119,11 @@ describe("DocumentEditor chrome", () => {
     renderEditor();
     expect(await screen.findByDisplayValue("Draft one")).toBeVisible();
     expect(screen.getByRole("button", { name: "Share" })).toBeVisible();
-    expect(screen.getByRole("combobox", { name: "Editing mode" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Editing mode" })).toBeVisible();
     expect(screen.getByRole("button", { name: "More" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Publish" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Publish" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Publish" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Settings" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Members" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Versions" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
     expect(screen.queryByText("Connected")).toBeNull();
     expect(screen.queryByText(/Type \/ to insert/)).toBeNull();
@@ -158,7 +141,7 @@ describe("DocumentEditor chrome", () => {
     expect(screen.queryByText(/document sequence does not match/i)).toBeNull();
   });
 
-  it("keeps settings without a title field and versions behind the more menu", async () => {
+  it("keeps document settings without duplicating the title field", async () => {
     renderEditor();
     await openMoreItem("Document settings");
     expect(await screen.findByRole("heading", { name: "Document settings" })).toBeVisible();
@@ -169,8 +152,8 @@ describe("DocumentEditor chrome", () => {
   it("localizes the former English chrome labels", async () => {
     renderEditor("zh-CN");
     expect(await screen.findByRole("button", { name: "分享" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "发布" })).toBeVisible();
-    expect(screen.getByRole("combobox", { name: "编辑模式" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "发布" })).toBeNull();
+    expect(screen.getByRole("button", { name: "编辑模式" })).toBeVisible();
     expect(screen.queryByRole("button", { name: "Settings" })).toBeNull();
     expect(screen.queryByText("Connected")).toBeNull();
     expect(screen.queryByText("Publish")).toBeNull();
@@ -205,14 +188,6 @@ describe("DocumentEditor chrome", () => {
     expect(membersApi.remove).not.toHaveBeenCalled();
   });
 
-  it("only exposes the automatic recovery point", async () => {
-    renderEditor();
-    await openMoreItem("Version history");
-    expect(screen.queryByRole("button", { name: "Create version" })).toBeNull();
-    expect(screen.getByText("Automatic recovery only")).toBeVisible();
-    expect(versionsApi.create).not.toHaveBeenCalled();
-  });
-
   it("treats Ctrl+S as a throttled automatic-save reminder", async () => {
     renderEditor();
     expect(await screen.findByRole("button", { name: "Share" })).toBeVisible();
@@ -220,16 +195,6 @@ describe("DocumentEditor chrome", () => {
     expect(screen.getByText("Already saved automatically — no manual save needed")).toBeVisible();
     fireEvent.keyDown(window, { key: "s", ctrlKey: true });
     expect(screen.getAllByText("Already saved automatically — no manual save needed")).toHaveLength(1);
-  });
-
-  it("does not restore a version when the confirm dialog is cancelled", async () => {
-    renderEditor();
-    await openMoreItem("Version history");
-    fireEvent.click(await screen.findByRole("button", { name: "Restore" }));
-    expect(screen.getByRole("dialog")).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(versionsApi.get).not.toHaveBeenCalled();
-    expect(versionsApi.restore).not.toHaveBeenCalled();
   });
 
   it("does not delete a document when the trash dialog is cancelled", async () => {
