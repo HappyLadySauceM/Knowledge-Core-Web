@@ -2,7 +2,7 @@ import { z } from "zod";
 import { apiRequest } from "@/lib/api/client";
 import { CollaborationSessionSchema, CommitPageSchema, CommitSchema, DocumentPageSchema, DocumentSummarySchema } from "@/lib/api/types";
 
-export type DocumentFilters = { q?: string; cursor?: string; access?: "owner" | "shared"; publication?: "published" | "draft"; limit?: number };
+export type DocumentFilters = { q?: string; cursor?: string; access?: "owner" | "shared"; publication?: "published" | "draft"; folder_id?: string; limit?: number };
 function query(filters: DocumentFilters = {}) { const p = new URLSearchParams(); Object.entries(filters).forEach(([key, value]) => { if (value !== undefined && value !== "") p.set(key, String(value)); }); return p.size ? `?${p}` : ""; }
 export const documentsApi = {
   list: (filters?: DocumentFilters) => apiRequest(`/api/v1/studio/documents${query(filters)}`, DocumentPageSchema),
@@ -21,6 +21,5 @@ export const documentsApi = {
     get: (id: string, commitId: string) => apiRequest(`/api/v1/studio/documents/${encodeURIComponent(id)}/commits/${encodeURIComponent(commitId)}`, CommitSchema),
     create: (id: string, body: { kind: string; label?: string; description?: string; content_hash?: string; content?: unknown; plain_text?: string }, idempotencyKey = crypto.randomUUID()) => apiRequest(`/api/v1/studio/documents/${encodeURIComponent(id)}/commits`, CommitSchema, { method: "POST", headers: { "Idempotency-Key": idempotencyKey }, body: JSON.stringify(body) }),
     rename: (id: string, commitId: string, body: { label: string; description?: string }) => apiRequest(`/api/v1/studio/documents/${encodeURIComponent(id)}/commits/${encodeURIComponent(commitId)}`, CommitSchema, { method: "PATCH", body: JSON.stringify(body) }),
-    restore: (id: string, commitId: string, idempotencyKey = crypto.randomUUID()) => apiRequest(`/api/v1/studio/documents/${encodeURIComponent(id)}/commits/${encodeURIComponent(commitId)}/restore`, DocumentSummarySchema, { method: "POST", headers: { "Idempotency-Key": idempotencyKey } }),
   },
 };

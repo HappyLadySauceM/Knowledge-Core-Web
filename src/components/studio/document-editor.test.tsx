@@ -4,15 +4,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DocumentEditor } from "@/components/studio/document-editor";
 import { membersApi } from "@/lib/api/collaboration";
 import { documentsApi } from "@/lib/api/documents";
-import { foldersApi } from "@/lib/api/folders";
 
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+const { navigationState, testState, useEditorMock } = vi.hoisted(() => ({
+  navigationState: { params: new URLSearchParams(), router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() } },
+  testState: { providerSynced: true, providerReady: true },
+  useEditorMock: vi.fn((options?: { extensions?: unknown[] }, deps?: unknown[]): unknown => {
+    void options;
+    void deps;
+    return null;
+  }),
 }));
 
-const { testState, useEditorMock } = vi.hoisted(() => ({
-  testState: { providerSynced: true, providerReady: true },
-  useEditorMock: vi.fn((_options?: { extensions?: unknown[] }, _deps?: unknown[]) => null),
+vi.mock("next/navigation", () => ({
+  useRouter: () => navigationState.router,
+  useSearchParams: () => navigationState.params,
 }));
 
 vi.mock("@tiptap/react", () => ({
@@ -38,23 +43,21 @@ vi.mock("@/lib/collaboration/provider", () => ({
     resync() { return Promise.resolve(); }
     flushOutbound() { return Promise.resolve(); }
     flushAndSync() { return Promise.resolve(); }
-
+    constructor(_session: unknown, _doc: unknown, callbacks?: { onStatus?: (status: string) => void }) {
+      queueMicrotask(() => callbacks?.onStatus?.("connected"));
+    }
   },
 }));
 
 vi.mock("@/lib/api/documents", () => ({
   documentsApi: {
     get: vi.fn(),
-    remove: vi.fn(),
     session: vi.fn(),
     publish: vi.fn(),
     unpublish: vi.fn(),
     update: vi.fn(),
+    commits: { get: vi.fn(), create: vi.fn() },
   },
-}));
-
-vi.mock("@/lib/api/folders", () => ({
-  foldersApi: { list: vi.fn() },
 }));
 
 vi.mock("@/lib/api/collaboration", () => ({
@@ -97,21 +100,19 @@ async function openShare() {
   fireEvent.click(await screen.findByRole("button", { name: "Share" }));
 }
 
-async function openMoreItem(name: string) {
-  fireEvent.click(await screen.findByRole("button", { name: "More" }));
-  fireEvent.click(await screen.findByRole("menuitem", { name }));
-}
-
 describe("DocumentEditor chrome", () => {
   beforeEach(() => {
     testState.providerSynced = true;
     testState.providerReady = true;
+    navigationState.params = new URLSearchParams();
+    navigationState.router.push.mockReset();
+    navigationState.router.replace.mockReset();
     useEditorMock.mockClear();
     vi.mocked(documentsApi.get).mockResolvedValue({ data: documentSummary });
-    vi.mocked(documentsApi.remove).mockReset();
     vi.mocked(documentsApi.publish).mockReset();
     vi.mocked(documentsApi.unpublish).mockReset();
-    vi.mocked(foldersApi.list).mockResolvedValue({ data: { items: [] } });
+    vi.mocked(documentsApi.commits.get).mockReset();
+    vi.mocked(documentsApi.commits.create).mockReset();
     vi.mocked(membersApi.list).mockResolvedValue({ data: { items: [member] } });
     vi.mocked(membersApi.add).mockReset();
     vi.mocked(membersApi.remove).mockReset();
@@ -147,12 +148,13 @@ describe("DocumentEditor chrome", () => {
     expect(screen.queryByText(/document sequence does not match/i)).toBeNull();
   });
 
-  it("keeps document settings without duplicating the title field", async () => {
+  it("removes manual save and document settings from the editor chrome", async () => {
     renderEditor();
-    await openMoreItem("Document settings");
-    expect(await screen.findByRole("heading", { name: "Document settings" })).toBeVisible();
-    expect(document.querySelector("form input[name='title']")).toBeNull();
-    expect(screen.getByDisplayValue("Draft one")).toBeVisible();
+    expect(await screen.findByDisplayValue("Draft one")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "More" }));
+    expect(screen.queryByRole("menuitem", { name: "Document settings" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Move to trash" })).toBeNull();
   });
 
   it("localizes the former English chrome labels", async () => {
@@ -246,17 +248,46 @@ describe("DocumentEditor chrome", () => {
     renderEditor();
     expect(await screen.findByRole("button", { name: "Share" })).toBeVisible();
     fireEvent.keyDown(window, { key: "s", ctrlKey: true });
-    expect(screen.getByText("Already saved automatically — no manual save needed")).toBeVisible();
+    expect(await screen.findByText("Already saved automatically — no manual save needed")).toBeVisible();
     fireEvent.keyDown(window, { key: "s", ctrlKey: true });
     expect(screen.getAllByText("Already saved automatically — no manual save needed")).toHaveLength(1);
   });
 
-  it("does not delete a document when the trash dialog is cancelled", async () => {
+  it("restores history into the live collaboration draft before clearing the restore URL", async () => {
+    navigationState.params = new URLSearchParams("restore=commit_1");
+    const setContent = vi.fn();
+    useEditorMock.mockReturnValue({
+      commands: { setContent },
+      getJSON: () => ({ type: "doc", content: [] }),
+      getText: () => "",
+      on: vi.fn(),
+      off: vi.fn(),
+      setEditable: vi.fn(),
+      isEditable: false,
+      state: { selection: { empty: true, from: 1, to: 1 } },
+      view: { dom: document.createElement("div") },
+    });
+    vi.mocked(documentsApi.commits.get).mockResolvedValue({
+      data: {
+        id: "commit_1",
+        document_id: "doc_1",
+        kind: "manual",
+        label: "Before edit",
+        contributor: "alice",
+        sequence: 1,
+        content_hash: "hash",
+        content: { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "Restored" }] }] },
+        plain_text: "Restored",
+        created_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-01-01T00:00:00Z",
+      },
+    });
+
     renderEditor();
-    await openMoreItem("Document settings");
-    fireEvent.click(await screen.findByRole("button", { name: "Move to trash" }));
-    expect(screen.getByRole("dialog")).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(documentsApi.remove).not.toHaveBeenCalled();
+
+    await waitFor(() => expect(setContent).toHaveBeenCalled());
+    await waitFor(() => expect(navigationState.router.replace).toHaveBeenCalledWith("/en/studio/documents/doc_1"));
+    expect(await screen.findByText("Version restored and saved to the draft")).toBeVisible();
   });
+
 });

@@ -22,7 +22,7 @@ import {
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SessionDataSchema, type SiteProfile } from "@/lib/api/types";
 import { getMessages } from "@/lib/i18n";
-import { StudioFolders } from "@/components/studio/studio-client";
+import { StudioFolders, type LibrarySelection } from "@/components/studio/studio-client";
 
 const sidebarStorageKey = "knowledge-core:studio-sidebar-collapsed";
 
@@ -95,6 +95,9 @@ export function BackendShell({ locale, profile, children }: { locale: string; pr
   const searchInputRef = useRef<HTMLInputElement>(null);
   const currentSearch = searchParams.get("q") ?? "";
   const selectedFolder = searchParams.get("folder") ?? undefined;
+  const selectedAccess = (searchParams.get("access") || undefined) as LibrarySelection["access"];
+  const selectedPublication = (searchParams.get("publication") || undefined) as LibrarySelection["publication"];
+  const selectedLibrary = searchParams.get("library") === "knowledge" ? "knowledge" : "personal";
   const [searchValue, setSearchValue] = useState(currentSearch);
   const isDocumentList = pathname === `/${locale}/studio`;
   const user = session.data?.user;
@@ -164,12 +167,15 @@ export function BackendShell({ locale, profile, children }: { locale: string; pr
     setMobileOpen(false);
   }
 
-  function updateFolder(folder?: string) {
+  function updateLibrary(selection: LibrarySelection) {
     const next = new URLSearchParams(searchParams.toString());
-    if (folder) next.set("folder", folder);
-    else next.delete("folder");
+    for (const name of ["folder", "access", "publication"] as const) next.delete(name);
+    next.set("library", selection.library);
+    if (selection.folder) next.set("folder", selection.folder);
+    if (selection.access) next.set("access", selection.access);
+    if (selection.publication) next.set("publication", selection.publication);
     next.delete("cursor");
-    router.replace(buildQueryURL(pathname, next), { scroll: false });
+    router.replace(buildQueryURL(`/${locale}/studio`, next), { scroll: false });
     closeMobile();
   }
 
@@ -245,7 +251,7 @@ export function BackendShell({ locale, profile, children }: { locale: string; pr
         {isDocumentList && !collapsed ? (
           <section className="backend-folder-section" aria-label={t.studio.folders}>
             <p className="backend-nav-heading">{t.studio.folders}</p>
-            <StudioFolders locale={locale} selected={selectedFolder} onSelect={updateFolder} />
+            <StudioFolders locale={locale} selected={selectedFolder} access={selectedAccess} publication={selectedPublication} library={selectedLibrary} onSelect={updateLibrary} />
           </section>
         ) : null}
 

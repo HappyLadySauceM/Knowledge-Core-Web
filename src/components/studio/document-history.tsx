@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, RotateCcw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { documentsApi } from "@/lib/api/documents";
@@ -12,24 +12,16 @@ import { getMessages } from "@/lib/i18n";
 export function DocumentHistory({ documentId, locale }: { documentId: string; locale: string }) {
   const t = getMessages(locale);
   const router = useRouter();
-  const queryClient = useQueryClient();
   const [selected, setSelected] = useState<string | null>(null);
   const commits = useQuery({ queryKey: ["commits", documentId], queryFn: () => documentsApi.commits.list(documentId).then((value) => value.data) });
   const detail = useQuery({ queryKey: ["commit", documentId, selected], queryFn: () => documentsApi.commits.get(documentId, selected!).then((value) => value.data), enabled: Boolean(selected) });
-  const restore = useMutation({
-    mutationFn: (commitId: string) => documentsApi.commits.restore(documentId, commitId),
-    onSuccess: (result) => {
-      queryClient.setQueryData(["document", documentId], result.data);
-      router.push(`/${locale}/studio/documents/${documentId}`);
-    },
-  });
   const current = detail.data ?? commits.data?.items.find((item) => item.id === selected);
   const content = (current?.content.content ?? []) as RichTextNode[];
   return <main className="document-history-page">
     <header className="document-history-header">
       <button type="button" onClick={() => router.push(`/${locale}/studio/documents/${documentId}`)}><ArrowLeft size={15} />{t.editor.backToEditor}</button>
       <h1>{t.editor.history}</h1>
-      {current ? <button type="button" className="editor-publish-button" onClick={() => void restore.mutateAsync(current.id)} disabled={restore.isPending}><RotateCcw size={14} />{restore.isPending ? t.common.working : t.editor.restoreCommit}</button> : null}
+      {current ? <button type="button" className="editor-publish-button" onClick={() => router.push(`/${locale}/studio/documents/${documentId}?restore=${encodeURIComponent(current.id)}`)}><RotateCcw size={14} />{t.editor.restoreCommit}</button> : null}
     </header>
     <div className="document-history-layout">
       <section className="document-history-preview">{current ? <><p className="eyebrow">{current.label} · {new Date(current.created_at).toLocaleString(locale)}</p><RichText content={content} /></> : <p>{t.editor.selectHistory}</p>}</section>

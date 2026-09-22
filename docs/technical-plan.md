@@ -49,9 +49,10 @@ Browser → Next.js BFF（HttpOnly cookie）→ Knowledge-Core Gateway → Ident
 - Collaboration 持久化唯一的实时编辑稿；Yjs/IndexedDB 与 WebSocket 重连后从服务端合并恢复，编辑内容不会直接改写公开页。
 - Knowledge 持有最近一次公开快照。首次打开“公开发布”或已发布文档点击“更新”时，Gateway 先通过 state vector 捕获已提交的 Collaboration 状态，再原子推进公开发布候选；公开列表和文章详情只读取有效快照。
 - 取消发布只撤下公开快照，完整编辑稿继续保留。回收站中的文档、取消发布中的候选、失败候选以及已标记永久删除的文档均不可通过公开 URL 访问。
-- 编辑稿之外保留显式提交历史：手动保存、离开、发布和恢复均通过 `/studio/documents/:id/commits` 形成可查看提交；历史恢复创建新的恢复提交，不删除旧提交。提交页面只读展示时间线和快照，实时草稿仍由 Collaboration/Yjs 负责。
+- 编辑稿之外保留显式提交历史：离开和发布可通过 `/studio/documents/:id/commits` 形成可查看提交，编辑器不再提供重复的手动保存按钮。历史页面只读展示时间线和快照；选择恢复后由编辑器将快照应用到 Collaboration/Yjs 草稿并等待同步确认，不再只更新 Knowledge 投影副本。
 - 回收站恢复仍是独立的软删除恢复；“永久删除”使用强 `If-Match`、`Idempotency-Key` 和不可逆确认，返回 `202` 后由后台幂等清理。
 - 标题、正文、摘要、标签、图标和封面焦点参与规范化 authoring hash。已发布文档只有 hash 不同才启用“更新”；草稿同步状态和历史提交状态分别显示，避免普通输入推动顶部按钮抖动。
+- Studio 侧栏按可扩展库树组织“我的文档库”和“知识库”：个人库包含拥有、共享和嵌套文件夹，知识库当前映射有效公开快照。后续组织工作空间可增加同级库根并携带 workspace/subject 权限上下文，无需重做导航层级。
 
 上述页面均通过同源 BFF 或服务端 Gateway client 连接真实业务 API；浏览器不持有 Gateway token。
 

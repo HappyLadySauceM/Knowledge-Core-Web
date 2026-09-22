@@ -20,6 +20,7 @@ vi.mock("@/lib/api/documents", () => ({
   documentsApi: {
     list: vi.fn(),
     create: vi.fn(),
+    remove: vi.fn(),
   },
 }));
 
@@ -70,6 +71,7 @@ describe("Studio dialogs and URL filters", () => {
     vi.mocked(foldersApi.remove).mockReset();
     vi.mocked(documentsApi.list).mockResolvedValue({ data: { items: [], page: { has_more: false } } });
     vi.mocked(documentsApi.create).mockReset();
+    vi.mocked(documentsApi.remove).mockReset();
   });
 
   afterEach(() => {
@@ -121,7 +123,27 @@ describe("Studio dialogs and URL filters", () => {
       },
     });
     renderWithQuery(<StudioClient locale="en" />);
-    await waitFor(() => expect(documentsApi.list).toHaveBeenCalledWith(expect.objectContaining({ q: "notes" })));
+    await waitFor(() => expect(documentsApi.list).toHaveBeenCalledWith(expect.objectContaining({ q: "notes", folder_id: "fld_1" })));
     expect(await screen.findByRole("heading", { name: "Notes" })).toBeVisible();
+  });
+
+  it("renders personal and knowledge library roots", async () => {
+    renderWithQuery(<StudioFolders locale="en" />);
+    expect(await screen.findByRole("button", { name: "My document library" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Knowledge base" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Shared with me" })).toBeVisible();
+  });
+
+  it("moves an owned document to trash from the document list", async () => {
+    vi.mocked(documentsApi.list).mockResolvedValue({ data: { items: [documentSummary], page: { has_more: false } } });
+    vi.mocked(documentsApi.remove).mockResolvedValue({ data: undefined });
+    renderWithQuery(<StudioClient locale="en" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Move to trash Notes" }));
+    expect(screen.getByRole("dialog")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => expect(documentsApi.remove).toHaveBeenCalledWith("doc_1", 1));
+    await waitFor(() => expect(screen.queryByRole("heading", { name: "Notes" })).toBeNull());
   });
 });

@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEditor } from "@tiptap/react";
+import type { JSONContent } from "@tiptap/core";
 import { IndexeddbPersistence } from "y-indexeddb";
 import * as Y from "yjs";
-import { ChevronDown, Clock3, Copy, ImagePlus, Maximize2, MoreHorizontal, Save, Settings, Share2, SmilePlus, Trash2, X } from "lucide-react";
+import { ChevronDown, Clock3, Copy, ImagePlus, Maximize2, MoreHorizontal, Share2, SmilePlus } from "lucide-react";
 import { EditorCanvas } from "@/components/studio/editor-canvas";
 import { AppDialog } from "@/components/ui/dialog";
 import { documentsApi } from "@/lib/api/documents";
@@ -23,7 +24,7 @@ import { getMessages } from "@/lib/i18n";
 type EditorMenu = "share" | "more" | "mode" | null;
 type EditorMode = "edit" | "read";
 type EditorWidth = "comfortable" | "wide";
-type CommitKind = "manual" | "leave" | "publish";
+type CommitKind = "leave" | "publish";
 
 const persistenceFallbackMs = 5_000;
 
@@ -62,6 +63,7 @@ export function DocumentEditor({ documentId, locale }: { documentId: string; loc
 
 function DocumentEditorSession({ documentId, locale }: { documentId: string; locale: string }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const t = getMessages(locale);
   const [doc, setDoc] = useState<Y.Doc | null>(null);
@@ -72,7 +74,6 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState("");
   const [autosaveNotice, setAutosaveNotice] = useState("");
-  const [panel, setPanel] = useState<"settings" | null>(null);
   const [menu, setMenu] = useState<EditorMenu>(null);
   const [modePreference, setModePreference] = useState<EditorMode>("edit");
   const [editorWidth, setEditorWidth] = useState<EditorWidth>("comfortable");
@@ -83,7 +84,6 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
   const [draftHash, setDraftHash] = useState<string | null>(null);
   const [commitSaving, setCommitSaving] = useState(false);
   const [dialog, setDialog] = useState<
-    | { kind: "delete-document" }
     | { kind: "add-member" }
     | { kind: "remove-member"; userId: string; revision: number; name: string }
     | { kind: "set-link"; href: string }
@@ -97,6 +97,7 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
   const persistenceRef = useRef<{ whenSynced: Promise<unknown> } | null>(null);
   const headerRef = useRef<HTMLElement | null>(null);
   const saveCommitRef = useRef<((kind?: CommitKind) => Promise<void>) | null>(null);
+  const restoringCommitRef = useRef<string | null>(null);
   const documentQuery = useQuery({
     queryKey: ["document", documentId],
     queryFn: () => documentsApi.get(documentId).then((value) => value.data),
@@ -258,7 +259,12 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
       if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "s") return;
       event.preventDefault();
       event.stopPropagation();
-      void saveCommitRef.current?.("manual");
+      void provider?.flushAndSync().then(() => {
+        setAutosaveNotice(t.editor.autosaveReminder);
+        window.setTimeout(() => setAutosaveNotice(""), 2_400);
+      }).catch((reason: unknown) => {
+        setError(reason instanceof Error ? sanitizeEditorError(reason.message, t.editor) : t.editor.collaborationSyncFailed);
+      });
     };
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
@@ -274,16 +280,38 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
   }, [editorWidth, editorWidthLoaded]);
 
   useEffect(() => {
-    if (!menu && !panel) return undefined;
+    if (!menu) return undefined;
     const onPointer = (event: MouseEvent) => {
       if (!headerRef.current?.contains(event.target as Node)) {
         setMenu(null);
-        setPanel(null);
       }
     };
     document.addEventListener("mousedown", onPointer);
     return () => document.removeEventListener("mousedown", onPointer);
-  }, [menu, panel]);
+  }, [menu]);
+
+  useEffect(() => {
+    const commitId = searchParams.get("restore");
+    if (!commitId || !editor || !provider || !canEdit || status !== "connected" || !provider.isReady) return;
+    if (restoringCommitRef.current === commitId) return;
+    restoringCommitRef.current = commitId;
+    let active = true;
+    void documentsApi.commits.get(documentId, commitId).then(async ({ data: commit }) => {
+      if (!active) return;
+      editor.commands.setContent(commit.content as JSONContent);
+      await provider.flushAndSync();
+      if (!active) return;
+      setAutosaveNotice(t.editor.restoreSaved);
+      window.setTimeout(() => setAutosaveNotice(""), 2_400);
+      const next = new URLSearchParams(searchParams.toString());
+      next.delete("restore");
+      router.replace(`/${locale}/studio/documents/${documentId}${next.size ? `?${next}` : ""}`);
+    }).catch((reason: unknown) => {
+      restoringCommitRef.current = null;
+      if (active) setError(reason instanceof Error ? sanitizeEditorError(reason.message, t.editor) : t.editor.restoreFailed);
+    });
+    return () => { active = false; };
+  }, [canEdit, documentId, editor, locale, provider, router, searchParams, status, t.editor]);
 
   async function publish() {
     if (publishing) return;
@@ -337,12 +365,8 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
     return result.data;
   }
 
-  async function saveCommit(kind: CommitKind = "manual") {
+  async function saveCommit(kind: CommitKind = "leave") {
     if (!editor || !documentQuery.data || !canEdit || commitSaving) {
-      if (kind === "manual") {
-        setAutosaveNotice(t.editor.autosaveReminder);
-        window.setTimeout(() => setAutosaveNotice(""), 2_400);
-      }
       return;
     }
     setCommitSaving(true);
@@ -357,11 +381,9 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
         coverFocalX: documentQuery.data.cover_focal_x, coverFocalY: documentQuery.data.cover_focal_y,
       });
       await documentsApi.commits.create(documentId, {
-        kind, label: kind === "publish" ? t.editor.publishCommit : t.editor.manualCommit,
+        kind, label: kind === "publish" ? t.editor.publishCommit : t.editor.leaveCommit,
         content_hash: contentHash, content, plain_text: plainText,
       });
-      setAutosaveNotice(t.editor.commitSaved);
-      window.setTimeout(() => setAutosaveNotice(""), 1_800);
       setError("");
     } catch (reason) {
       setError(reason instanceof Error ? sanitizeEditorError(reason.message, t.editor) : t.editor.commitFailed);
@@ -512,12 +534,6 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
     setDialogPending(true);
     setError("");
     try {
-      if (dialog.kind === "delete-document") {
-        if (!documentQuery.data) return;
-        await documentsApi.remove(documentId, documentQuery.data.metadata_revision);
-        router.push(`/${locale}/studio`);
-        return;
-      }
       if (dialog.kind === "add-member") {
         await membersApi.add(documentId, value, "viewer");
         await members.refetch();
@@ -589,12 +605,6 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
         />
         <span className="editor-autosave-status" role="status" aria-live="polite">{autosaveStatus}</span>
         <div className="editor-header-actions">
-          {canEdit ? (
-            <button type="button" className="editor-commit-button" onClick={() => void saveCommit("manual")} disabled={commitSaving || !editor || status === "offline"}>
-              <Save size={14} />
-              {commitSaving ? t.editor.savingCommit : t.common.save}
-            </button>
-          ) : null}
           {documentQuery.data?.access === "owner" ? (
             <div className="editor-popover-wrap">
               <button
@@ -629,7 +639,7 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
             </div>
           ) : null}
           <div className="editor-popover-wrap editor-mode-control">
-            <button type="button" aria-label={t.editor.mode} aria-haspopup="menu" aria-expanded={menu === "mode"} disabled={!canEdit} onClick={() => { setPanel(null); setMenu(menu === "mode" ? null : "mode"); }}>
+            <button type="button" aria-label={t.editor.mode} aria-haspopup="menu" aria-expanded={menu === "mode"} disabled={!canEdit} onClick={() => setMenu(menu === "mode" ? null : "mode")}>
               {writing ? t.editor.editMode : t.editor.readMode}<ChevronDown size={14} aria-hidden="true" />
             </button>
             {menu === "mode" ? (
@@ -655,7 +665,7 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
             ) : null}
           </div>
           <div className="editor-popover-wrap editor-panel-anchor">
-            <button type="button" aria-label={t.editor.more} aria-expanded={menu === "more"} onClick={() => { setPanel(null); setMenu(menu === "more" ? null : "more"); }}>
+            <button type="button" aria-label={t.editor.more} aria-expanded={menu === "more"} onClick={() => setMenu(menu === "more" ? null : "more")}>
               <MoreHorizontal size={16} />
             </button>
             {menu === "more" ? (
@@ -665,33 +675,8 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
                 </div>
                 <div className="editor-menu-group"><span>{t.editor.documentTools}</span>
                   <button type="button" role="menuitem" onClick={() => { router.push(`/${locale}/studio/documents/${documentId}/history`); setMenu(null); }}><Clock3 size={14} />{t.editor.history}</button>
-                  <button type="button" role="menuitem" onClick={() => { setPanel("settings"); setMenu(null); }}><Settings size={14} />{t.studio.documentSettings}</button>
                   <button type="button" role="menuitem" onClick={() => setMenu(null)}><Copy size={14} />{t.editor.copyToKnowledgeBase}</button>
                 </div>
-              </div>
-            ) : null}
-            {panel ? (
-              <div className="editor-popover editor-panel editor-floating-panel" role="region" aria-label={t.studio.documentSettings}>
-                <div className="editor-panel-head">
-                  <h2>{t.studio.documentSettings}</h2>
-                  <button type="button" className="editor-panel-close" aria-label={t.editor.closePanel} onClick={() => setPanel(null)}><X size={15} /></button>
-                </div>
-                {panel === "settings" && documentQuery.data ? (
-                  <div className="editor-settings-summary">
-                    <p>{t.editor.inlineMetadataHint}</p>
-                    <div className="editor-width-control">
-                      <span>{t.editor.editorWidth}</span>
-                      <div role="group" aria-label={t.editor.editorWidth}>
-                        <button type="button" className={editorWidth === "comfortable" ? "is-selected" : ""} onClick={() => setEditorWidth("comfortable")}><Maximize2 size={14} />{t.editor.widthComfortable}</button>
-                        <button type="button" className={editorWidth === "wide" ? "is-selected" : ""} onClick={() => setEditorWidth("wide")}><Maximize2 size={14} />{t.editor.widthWide}</button>
-                      </div>
-                    </div>
-                    <button className="danger-button" type="button" onClick={() => setDialog({ kind: "delete-document" })}>
-                      <Trash2 size={14} />
-                      {t.studio.deleteDocument}
-                    </button>
-                  </div>
-                ) : null}
               </div>
             ) : null}
           </div>
@@ -751,7 +736,7 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
         key={dialog?.kind === "remove-member" ? `remove-${dialog.userId}` : dialog?.kind === "set-link" ? "set-link" : dialog?.kind}
         open={Boolean(dialog)}
         title={dialog?.kind === "add-member" ? t.studio.addMember : dialog?.kind === "remove-member" ? t.studio.removeMember : dialog?.kind === "set-link" ? t.editor.linkTitle : t.studio.deleteDocument}
-        description={dialog?.kind === "remove-member" ? t.studio.removeMemberBody.replace("{name}", dialog.name) : dialog?.kind === "delete-document" ? t.studio.deleteDocumentBody.replace("{name}", documentQuery.data?.title ?? "") : undefined}
+        description={dialog?.kind === "remove-member" ? t.studio.removeMemberBody.replace("{name}", dialog.name) : undefined}
         inputLabel={dialog?.kind === "add-member" ? t.studio.memberUsername : dialog?.kind === "set-link" ? t.editor.linkUrl : undefined}
         inputDefault={dialog?.kind === "set-link" ? dialog.href : undefined}
         inputRequired={dialog?.kind === "add-member" || dialog?.kind === "set-link"}
