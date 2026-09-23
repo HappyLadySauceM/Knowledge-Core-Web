@@ -88,6 +88,31 @@ function syncTypes(payload: Uint8Array): number[] {
   return types;
 }
 
+function awarenessClientIds(payload: Uint8Array): number[] {
+  const decoder = decoding.createDecoder(payload);
+  const ids: number[] = [];
+  while (decoding.hasContent(decoder)) {
+    const type = decoding.readVarUint(decoder);
+    if (type === 0) {
+      decoding.readVarUint(decoder);
+      decoding.readVarUint8Array(decoder);
+      continue;
+    }
+    if (type === 1) {
+      const update = decoding.createDecoder(decoding.readVarUint8Array(decoder));
+      const len = decoding.readVarUint(update);
+      for (let i = 0; i < len; i += 1) {
+        ids.push(decoding.readVarUint(update));
+        decoding.readVarUint(update);
+        decoding.readVarString(update);
+      }
+      continue;
+    }
+    break;
+  }
+  return ids;
+}
+
 function applyClientPayload(serverDoc: Y.Doc, payload: Uint8Array) {
   const decoder = decoding.createDecoder(payload);
   while (decoding.hasContent(decoder)) {
@@ -308,6 +333,52 @@ describe("KnowledgeWebSocketProvider handshake", () => {
     encoding.writeVarUint8Array(encoder, awarenessProtocol.encodeAwarenessUpdate(remoteAwareness, [remoteAwareness.clientID]));
     socket.incoming(encoding.toUint8Array(encoder));
     expect(socket.sent).toHaveLength(before);
+    remoteAwareness.destroy();
+    provider.destroy();
+  });
+
+  it("strips remote client IDs from outbound awareness frames", async () => {
+    vi.stubGlobal("WebSocket", FakeWebSocket);
+    const onTerminal = vi.fn();
+    const provider = new KnowledgeWebSocketProvider(
+      async () => ({
+        websocket_url: "ws://collaboration.test/v1/documents/doc",
+        ticket: "ticket",
+        subprotocol: "y-sync",
+      }),
+      new Y.Doc(),
+      { onTerminal },
+    );
+    await vi.waitFor(() => expect(sockets.length).toBeGreaterThan(0));
+    const socket = sockets[sockets.length - 1]!;
+    socket.open();
+
+    const remote = new Y.Doc();
+    const remoteAwareness = new awarenessProtocol.Awareness(remote);
+    remoteAwareness.setLocalStateField("user", { name: "Other", color: "#f00" });
+    const remoteId = remoteAwareness.clientID;
+    const inbound = encoding.createEncoder();
+    encoding.writeVarUint(inbound, 1);
+    encoding.writeVarUint8Array(inbound, awarenessProtocol.encodeAwarenessUpdate(remoteAwareness, [remoteId]));
+    socket.incoming(encoding.toUint8Array(inbound));
+
+    const before = socket.sent.length;
+    const localId = provider.awareness.clientID;
+    // Simulate a buggy local event that lists both local and remote client IDs.
+    // 模拟错误的本地事件：changed 同时带上本地与远程 clientID。
+    provider.awareness.emit("update", [
+      { added: [], updated: [localId, remoteId], removed: [] },
+      "local-test",
+    ]);
+
+    const awarenessFrames = socket.sent.slice(before).filter((payload) => awarenessClientIds(payload).length > 0);
+    expect(awarenessFrames.length).toBeGreaterThan(0);
+    for (const frame of awarenessFrames) {
+      const ids = awarenessClientIds(frame);
+      expect(ids).toEqual([localId]);
+      expect(ids).not.toContain(remoteId);
+    }
+    expect(onTerminal).not.toHaveBeenCalled();
     remoteAwareness.destroy();
     provider.destroy();
   });

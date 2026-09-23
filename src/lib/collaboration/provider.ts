@@ -95,13 +95,18 @@ export class KnowledgeWebSocketProvider {
     this.onAwareness = ({ added, updated, removed }, origin) => {
       // Server-originated awareness is already broadcast by the actor. Echoing it
       // back would claim other collaborators' client IDs and trigger protocol 4400.
+      // 服务端已广播的 awareness 不得回声；否则会冒充他人 clientID 触发协议 4400。
       if (origin === this) return;
       const socket = this.socket;
       if (!socket || socket.readyState !== WebSocket.OPEN) return;
-      const changed = added.concat(updated, removed);
+      // Defense in depth: only advertise this connection's local client ID (server MAX=1).
+      // 纵深防御：出站只带本连接本地 clientID（服务端每连接最多 1 个）。
+      const localId = this.awareness.clientID;
+      const local = added.concat(updated, removed).filter((id) => id === localId);
+      if (local.length === 0) return;
       const encoder = encoding.createEncoder();
       encoding.writeVarUint(encoder, awarenessMessage);
-      encoding.writeVarUint8Array(encoder, awarenessProtocol.encodeAwarenessUpdate(this.awareness, changed));
+      encoding.writeVarUint8Array(encoder, awarenessProtocol.encodeAwarenessUpdate(this.awareness, local));
       socket.send(encoding.toUint8Array(encoder));
     };
     this.attach();
