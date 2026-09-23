@@ -25,11 +25,11 @@ jobs:
     timeout-minutes: 15
     environment: maintenance
     steps:
-      - uses: HappyLadySauceM/ci-templates/.github/actions/checkout-with-retry@e05f029f7a981aad7b681d80d951b09c7e9c87aa # v7.0.1
+      - uses: HappyLadySauceM/ci-templates/.github/actions/checkout-with-retry@d0038f4ca4eaa79ce5115c704bdb593960681513 # v7.0.1
         with:
           fetch-depth: 1
       - name: Prepare Harbor credentials
-        uses: HappyLadySauceM/ci-templates/.github/actions/prepare-harbor@e05f029f7a981aad7b681d80d951b09c7e9c87aa
+        uses: HappyLadySauceM/ci-templates/.github/actions/prepare-harbor@d0038f4ca4eaa79ce5115c704bdb593960681513
         with:
           docker-config-json: ${{ secrets.HARBOR_DOCKER_CONFIG_JSON }}
           ca-pem: ${{ secrets.HARBOR_CA_PEM }}
