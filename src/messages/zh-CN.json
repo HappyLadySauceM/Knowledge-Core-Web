@@ -177,6 +177,7 @@
     "collaborationResetFailed": "无法重置协作状态",
     "documentRestored": "文档已恢复，正在重新加载协作状态…",
     "updateFailed": "更新失败",
+    "publicationBackground": "更新仍在后台处理中；如果长时间未完成，可以安全重试。",
     "unpublishFailed": "取消发布失败",
     "memberUpdateFailed": "无法更新成员",
     "requestFailed": "请求失败",

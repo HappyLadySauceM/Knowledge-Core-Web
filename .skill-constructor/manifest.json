@@ -3,7 +3,7 @@
   "facts": [
     {
       "id": "architecture.design",
-      "revision": 65,
+      "revision": 76,
       "section": "architecture",
       "sources": [
         {
@@ -21,12 +21,16 @@
           "reference": "docs/technical-plan.md"
         },
         {
+          "kind": "documented",
+          "reference": "docs/technical-plan.md#automatic-history-and-double-state-publication"
+        },
+        {
           "kind": "user",
           "reference": "user-confirmed-web-bff-session-layer"
         }
       ],
       "status": "verified",
-      "updatedAt": "2026-09-14T07:43:27Z",
+      "updatedAt": "2026-09-23T08:29:36Z",
       "value": {
         "containers": [
           {
@@ -153,6 +157,14 @@
           {
             "description": "Yjs WebSocket traffic goes browser to Collaboration after Knowledge issues a short-lived ticket. The web process does not persist CRDT updates.",
             "name": "Live collaboration is not a web-owned hop"
+          },
+          {
+            "description": "Studio reads hash-deduplicated automatic history from Knowledge. Restore replaces the shared Yjs draft through Collaboration; the public snapshot remains unchanged until the author explicitly updates it.",
+            "name": "Automatic history and restore"
+          },
+          {
+            "description": "Editor changes remain in the realtime draft. Publish/update flushes Collaboration, requests a target generation and semantic hash, then waits until Knowledge reports that exact public snapshot active.",
+            "name": "Draft and public snapshot confirmation"
           }
         ],
         "principles": [
@@ -169,7 +181,7 @@
             "name": "Fail closed at the origin"
           },
           {
-            "description": "Folder, document, attachment, and collaboration authority stay in Knowledge-Core services. The UI must not infer permissions.",
+            "description": "Document, page-tree, space, history, attachment, and collaboration authority stay in Knowledge-Core services. The UI renders server-authorized state and must not infer permissions.",
             "name": "Web does not own backend data"
           }
         ],
@@ -202,8 +214,8 @@
             "name": "Docs lag the BFF"
           },
           {
-            "mitigation": "Do not claim document, folder, AI, or community features until those Gateway flows are wired and tested.",
-            "name": "Studio shells without domain APIs"
+            "mitigation": "Keep new organization, space, and page-tree UI behind Gateway contracts and do not infer missing authority while backend APIs are introduced.",
+            "name": "Partial organization and page-tree rollout"
           },
           {
             "mitigation": "Keep those environment definitions unnamed beyond kind; never invent namespaces, replica counts, or digests.",
@@ -826,11 +838,11 @@
     "profile": "generic",
     "slug": "knowledge-core-web"
   },
-  "revision": 74,
+  "revision": 77,
   "scan": {
-    "fingerprint": "fbc2c43f8aa8553468d20951cb1f51e3d1946c0d75dec38a122fd6322b619c28",
-    "inventoryCount": 172
+    "fingerprint": "4c8eac16c90c487ac427ea0d57c5944b4242a2ea6c6b402441a3deca5aebc5f0",
+    "inventoryCount": 174
   },
   "schemaVersion": 3,
-  "updatedAt": "2026-09-21T15:21:24Z"
+  "updatedAt": "2026-09-23T08:31:14Z"
 }

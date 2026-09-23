@@ -19,12 +19,12 @@ import { normalizeLinkHref } from "@/lib/editor/selection-toolbar";
 import { encodeRawUrlBase64 } from "@/lib/editor/state-vector";
 import { publicationSemanticHash } from "@/lib/editor/semantic-hash";
 import { createStudioDocumentExtensions } from "@/lib/editor/studio-extensions";
+import { replaceCollaborationDraft } from "@/lib/editor/restore-collaboration";
 import { getMessages } from "@/lib/i18n";
 
 type EditorMenu = "share" | "more" | "mode" | null;
 type EditorMode = "edit" | "read";
 type EditorWidth = "comfortable" | "wide";
-type CommitKind = "leave" | "publish";
 
 const persistenceFallbackMs = 5_000;
 
@@ -82,7 +82,6 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
   const [summaryOverride, setSummaryOverride] = useState<string | null>(null);
   const [tagsOverride, setTagsOverride] = useState<string[] | null>(null);
   const [draftHash, setDraftHash] = useState<string | null>(null);
-  const [commitSaving, setCommitSaving] = useState(false);
   const [dialog, setDialog] = useState<
     | { kind: "add-member" }
     | { kind: "remove-member"; userId: string; revision: number; name: string }
@@ -96,7 +95,6 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
   const attachmentPositionRef = useRef<number | null>(null);
   const persistenceRef = useRef<{ whenSynced: Promise<unknown> } | null>(null);
   const headerRef = useRef<HTMLElement | null>(null);
-  const saveCommitRef = useRef<((kind?: CommitKind) => Promise<void>) | null>(null);
   const restoringCommitRef = useRef<string | null>(null);
   const documentQuery = useQuery({
     queryKey: ["document", documentId],
@@ -204,7 +202,6 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
     if (!provider) return undefined;
     const flush = () => {
       void provider.flushOutbound().catch(() => undefined);
-      if (canEdit) void saveCommitRef.current?.("leave");
     };
     const flushWhenHidden = () => {
       if (document.visibilityState === "hidden") flush();
@@ -292,14 +289,24 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
 
   useEffect(() => {
     const commitId = searchParams.get("restore");
-    if (!commitId || !editor || !provider || !canEdit || status !== "connected" || !provider.isReady) return;
+    if (!commitId || !editor || !provider || !canEdit || !documentQuery.data || status !== "connected" || !provider.isReady) return;
     if (restoringCommitRef.current === commitId) return;
     restoringCommitRef.current = commitId;
+    const currentDocument = documentQuery.data;
     let active = true;
-    void documentsApi.commits.get(documentId, commitId).then(async ({ data: commit }) => {
+    void documentsApi.history.get(documentId, commitId).then(async ({ data: commit }) => {
       if (!active) return;
-      editor.commands.setContent(commit.content as JSONContent);
+      if (!doc) throw new Error(t.editor.collaborationSyncFailed);
+      replaceCollaborationDraft(editor, doc, commit.content as JSONContent);
       await provider.flushAndSync();
+      const metadata = JSON.parse(commit.metadata_json) as Partial<{
+        title: string; summary: string; language: string; tags: string[]; icon: string;
+        cover_attachment_id: string; cover_focal_x: number; cover_focal_y: number;
+      }>;
+      if (Object.keys(metadata).length > 0) {
+        await documentsApi.update(documentId, currentDocument.metadata_revision, metadata);
+        await queryClient.invalidateQueries({ queryKey: ["document", documentId] });
+      }
       if (!active) return;
       setAutosaveNotice(t.editor.restoreSaved);
       window.setTimeout(() => setAutosaveNotice(""), 2_400);
@@ -311,7 +318,7 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
       if (active) setError(reason instanceof Error ? sanitizeEditorError(reason.message, t.editor) : t.editor.restoreFailed);
     });
     return () => { active = false; };
-  }, [canEdit, documentId, editor, locale, provider, router, searchParams, status, t.editor]);
+  }, [canEdit, doc, documentId, documentQuery.data, editor, locale, provider, queryClient, router, searchParams, status, t.editor]);
 
   async function publish() {
     if (publishing) return;
@@ -321,7 +328,6 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
       const metadata = await flushPendingMetadata();
       const currentDocument = metadata ?? documentQuery.data;
       if (!currentDocument) throw new Error("metadata");
-      await saveCommit("publish");
       const idempotencyKey = crypto.randomUUID();
       const result = await publishAfterSync({
         wait: () => waitForPublishReady({
@@ -342,6 +348,19 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
         flushAndSync: () => provider?.flushAndSync() ?? Promise.reject(new Error("Collaboration is not ready")),
       });
       queryClient.setQueryData(["document", documentId], result);
+      const targetGeneration = result.publication_generation;
+      const targetHash = result.publication_hash;
+      let confirmed = result;
+      for (let attempt = 0; attempt < 20 && (confirmed.publication_status !== "published" || confirmed.publication_generation !== targetGeneration || confirmed.active_publication_hash !== targetHash); attempt += 1) {
+        await new Promise((resolve) => window.setTimeout(resolve, 750));
+        confirmed = (await documentsApi.get(documentId)).data;
+        queryClient.setQueryData(["document", documentId], confirmed);
+        if (confirmed.publication_status === "publish_failed") throw new Error(confirmed.publication_error || "publication failed");
+      }
+      if (confirmed.publication_status !== "published" || confirmed.active_publication_hash !== targetHash) {
+        setAutosaveNotice(t.editor.publicationBackground);
+        window.setTimeout(() => setAutosaveNotice(""), 4_000);
+      }
     } catch (reason) {
       if (reason instanceof Error && reason.message === "metadata") setError(t.editor.metadataNotReady);
       else setError(mapPublishError(reason, t.editor));
@@ -364,35 +383,6 @@ function DocumentEditorSession({ documentId, locale }: { documentId: string; loc
     setTagsOverride(null);
     return result.data;
   }
-
-  async function saveCommit(kind: CommitKind = "leave") {
-    if (!editor || !documentQuery.data || !canEdit || commitSaving) {
-      return;
-    }
-    setCommitSaving(true);
-    try {
-      await provider?.flushAndSync();
-      const content = editor.getJSON();
-      const plainText = editor.getText();
-      const contentHash = await publicationSemanticHash({
-        title: titleDraft, summary: summaryDraft, slug: documentQuery.data.slug,
-        language: documentQuery.data.language, tags: tagsDraft, content, plainText,
-        icon: documentQuery.data.icon, coverAttachmentId: documentQuery.data.cover_attachment_id,
-        coverFocalX: documentQuery.data.cover_focal_x, coverFocalY: documentQuery.data.cover_focal_y,
-      });
-      await documentsApi.commits.create(documentId, {
-        kind, label: kind === "publish" ? t.editor.publishCommit : t.editor.leaveCommit,
-        content_hash: contentHash, content, plain_text: plainText,
-      });
-      setError("");
-    } catch (reason) {
-      setError(reason instanceof Error ? sanitizeEditorError(reason.message, t.editor) : t.editor.commitFailed);
-    } finally {
-      setCommitSaving(false);
-    }
-  }
-
-  saveCommitRef.current = saveCommit;
 
   async function unpublish() {
     if (!metadataRevision) return;

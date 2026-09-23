@@ -88,7 +88,7 @@ flowchart LR
 
 ### Web 不拥有后端数据
 
-- **description**: 文件夹、文档、附件与协作裁决权留在 Knowledge-Core 服务。UI 不得自行推断权限。
+- **description**: 文档、页面树、空间、历史记录、附件与协作裁决权留在 Knowledge-Core 服务。UI 只渲染服务端已授权状态，不得自行推断权限。
 
 
 ## 关键流程
@@ -108,6 +108,14 @@ flowchart LR
 ### 实时协作不是 Web 拥有的一跳
 
 - **description**: Knowledge 签发短时 ticket 后，Yjs WebSocket 从浏览器直达 Collaboration。Web 进程不持久化 CRDT 更新。
+
+### 自动历史记录与恢复
+
+- **description**: Studio 从 Knowledge 读取按哈希去重的自动历史记录。恢复通过 Collaboration 替换共享 Yjs 草稿；在作者明确点击更新前，公开快照保持不变。
+
+### 草稿与公开快照确认
+
+- **description**: 编辑器变更保留在实时草稿中。发布/更新会先排空 Collaboration 同步，申请目标 generation 与语义哈希，再等待 Knowledge 报告该公开快照已准确生效。
 
 
 ## 质量属性
@@ -170,13 +178,13 @@ flowchart LR
 
 - **mitigation**: 把 `docs/progress.md` 当作历史记录；只记录 `src/app/api` 与 `deploy/web` 中已存在的行为。
 
-### 尚无领域 API 的 Studio 壳
+### 组织与页面树的分阶段发布
 
-- **mitigation**: 在这些 Gateway 流程接线并测试之前，不要声称已具备文档、文件夹、AI 或社区功能。
+- **mitigation**: 新的组织、空间与页面树界面必须通过 Gateway 契约逐步启用；后端 API 尚未落地时，前端不得自行推断缺失的权限裁决。
 
 ### 未观察到的 production 与 canary
 
 - **mitigation**: 这些环境定义除 kind 外不要编造名称细节；禁止虚构命名空间、副本数或 digest。
 
 
-<!-- fact:architecture.design status:verified sources:docs/superpowers/plans/2026-09-14-studio-shell-empty-state.md#studio-shell-layout-empty-state, docs/superpowers/plans/2026-09-14-studio-shell-empty-state.md#task-3-empty-state-information-architecture, docs/technical-plan.md, user-confirmed-web-bff-session-layer -->
+<!-- fact:architecture.design status:verified sources:docs/superpowers/plans/2026-09-14-studio-shell-empty-state.md#studio-shell-layout-empty-state, docs/superpowers/plans/2026-09-14-studio-shell-empty-state.md#task-3-empty-state-information-architecture, docs/technical-plan.md, docs/technical-plan.md#automatic-history-and-double-state-publication, user-confirmed-web-bff-session-layer -->

@@ -57,6 +57,7 @@ vi.mock("@/lib/api/documents", () => ({
     unpublish: vi.fn(),
     update: vi.fn(),
     commits: { get: vi.fn(), create: vi.fn() },
+    history: { get: vi.fn(), list: vi.fn() },
   },
 }));
 
@@ -111,8 +112,8 @@ describe("DocumentEditor chrome", () => {
     vi.mocked(documentsApi.get).mockResolvedValue({ data: documentSummary });
     vi.mocked(documentsApi.publish).mockReset();
     vi.mocked(documentsApi.unpublish).mockReset();
-    vi.mocked(documentsApi.commits.get).mockReset();
-    vi.mocked(documentsApi.commits.create).mockReset();
+    vi.mocked(documentsApi.history.get).mockReset();
+    vi.mocked(documentsApi.history.list).mockReset();
     vi.mocked(membersApi.list).mockResolvedValue({ data: { items: [member] } });
     vi.mocked(membersApi.add).mockReset();
     vi.mocked(membersApi.remove).mockReset();
@@ -267,19 +268,21 @@ describe("DocumentEditor chrome", () => {
       state: { selection: { empty: true, from: 1, to: 1 } },
       view: { dom: document.createElement("div") },
     });
-    vi.mocked(documentsApi.commits.get).mockResolvedValue({
+    vi.mocked(documentsApi.history.get).mockResolvedValue({
       data: {
         id: "commit_1",
         document_id: "doc_1",
-        kind: "manual",
-        label: "Before edit",
-        contributor: "alice",
+        kind: "automatic",
         sequence: 1,
-        content_hash: "hash",
+        metadata_revision: 3,
+        semantic_hash: "hash",
         content: { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "Restored" }] }] },
         plain_text: "Restored",
+        metadata_json: "{}",
+        contributors_json: "[]",
+        block_diff_json: "[]",
+        is_anchor: false,
         created_at: "2026-01-01T00:00:00Z",
-        updated_at: "2026-01-01T00:00:00Z",
       },
     });
 

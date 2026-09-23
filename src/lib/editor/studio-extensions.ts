@@ -9,6 +9,7 @@ import Underline from "@tiptap/extension-underline";
 import StarterKit from "@tiptap/starter-kit";
 import type * as Y from "yjs";
 import { StudioAttachment, StudioCallout, StudioColumn, StudioColumns, StudioFormula, StudioImage } from "@/lib/editor/rich-blocks";
+import { StableBlockId } from "@/lib/editor/block-id";
 
 type CollaborationCaretUser = { name: string; color: string };
 
@@ -19,6 +20,7 @@ export function createStudioDocumentExtensions(options?: {
   collaborationCaret?: { provider: never; user: CollaborationCaretUser };
 }): AnyExtension[] {
   const extensions: AnyExtension[] = [
+    StableBlockId,
     StarterKit.configure({
       ...(options?.collaboration ? { undoRedo: false } : {}),
       link: { openOnClick: false },

@@ -13,9 +13,9 @@ export function DocumentHistory({ documentId, locale }: { documentId: string; lo
   const t = getMessages(locale);
   const router = useRouter();
   const [selected, setSelected] = useState<string | null>(null);
-  const commits = useQuery({ queryKey: ["commits", documentId], queryFn: () => documentsApi.commits.list(documentId).then((value) => value.data) });
-  const detail = useQuery({ queryKey: ["commit", documentId, selected], queryFn: () => documentsApi.commits.get(documentId, selected!).then((value) => value.data), enabled: Boolean(selected) });
-  const current = detail.data ?? commits.data?.items.find((item) => item.id === selected);
+  const history = useQuery({ queryKey: ["history", documentId], queryFn: () => documentsApi.history.list(documentId).then((value) => value.data) });
+  const detail = useQuery({ queryKey: ["history-revision", documentId, selected], queryFn: () => documentsApi.history.get(documentId, selected!).then((value) => value.data), enabled: Boolean(selected) });
+  const current = detail.data ?? history.data?.items.find((item) => item.id === selected);
   const content = (current?.content.content ?? []) as RichTextNode[];
   return <main className="document-history-page">
     <header className="document-history-header">
@@ -24,9 +24,9 @@ export function DocumentHistory({ documentId, locale }: { documentId: string; lo
       {current ? <button type="button" className="editor-publish-button" onClick={() => router.push(`/${locale}/studio/documents/${documentId}?restore=${encodeURIComponent(current.id)}`)}><RotateCcw size={14} />{t.editor.restoreCommit}</button> : null}
     </header>
     <div className="document-history-layout">
-      <section className="document-history-preview">{current ? <><p className="eyebrow">{current.label} · {new Date(current.created_at).toLocaleString(locale)}</p><RichText content={content} /></> : <p>{t.editor.selectHistory}</p>}</section>
+      <section className="document-history-preview">{current ? <><p className="eyebrow">{current.kind} · {new Date(current.created_at).toLocaleString(locale)}</p><RichText content={content} /></> : <p>{t.editor.selectHistory}</p>}</section>
       <aside className="document-history-timeline" aria-label={t.editor.history}>
-        {commits.data?.items.map((commit) => <button type="button" className={commit.id === selected ? "is-selected" : ""} key={commit.id} onClick={() => setSelected(commit.id)}><strong>{commit.label}</strong><span>{commit.kind} · {new Date(commit.created_at).toLocaleString(locale)}</span><small>{commit.contributor}</small></button>)}
+        {history.data?.items.map((revision) => <button type="button" className={revision.id === selected ? "is-selected" : ""} key={revision.id} onClick={() => setSelected(revision.id)}><strong>{revision.kind}</strong><span>{new Date(revision.created_at).toLocaleString(locale)}</span><small>#{revision.sequence}</small></button>)}
       </aside>
     </div>
   </main>;

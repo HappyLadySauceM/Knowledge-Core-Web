@@ -88,7 +88,7 @@ flowchart LR
 
 ### Web does not own backend data
 
-- **description**: Folder, document, attachment, and collaboration authority stay in Knowledge-Core services. The UI must not infer permissions.
+- **description**: Document, page-tree, space, history, attachment, and collaboration authority stay in Knowledge-Core services. The UI renders server-authorized state and must not infer permissions.
 
 
 ## Key flows
@@ -108,6 +108,14 @@ flowchart LR
 ### Live collaboration is not a web-owned hop
 
 - **description**: Yjs WebSocket traffic goes browser to Collaboration after Knowledge issues a short-lived ticket. The web process does not persist CRDT updates.
+
+### Automatic history and restore
+
+- **description**: Studio reads hash-deduplicated automatic history from Knowledge. Restore replaces the shared Yjs draft through Collaboration; the public snapshot remains unchanged until the author explicitly updates it.
+
+### Draft and public snapshot confirmation
+
+- **description**: Editor changes remain in the realtime draft. Publish/update flushes Collaboration, requests a target generation and semantic hash, then waits until Knowledge reports that exact public snapshot active.
 
 
 ## Quality attributes
@@ -170,13 +178,13 @@ flowchart LR
 
 - **mitigation**: Treat docs/progress.md as historical; record only behavior present in src/app/api and deploy/web.
 
-### Studio shells without domain APIs
+### Partial organization and page-tree rollout
 
-- **mitigation**: Do not claim document, folder, AI, or community features until those Gateway flows are wired and tested.
+- **mitigation**: Keep new organization, space, and page-tree UI behind Gateway contracts and do not infer missing authority while backend APIs are introduced.
 
 ### Unobserved production and canary
 
 - **mitigation**: Keep those environment definitions unnamed beyond kind; never invent namespaces, replica counts, or digests.
 
 
-<!-- fact:architecture.design status:verified sources:docs/superpowers/plans/2026-09-14-studio-shell-empty-state.md#studio-shell-layout-empty-state, docs/superpowers/plans/2026-09-14-studio-shell-empty-state.md#task-3-empty-state-information-architecture, docs/technical-plan.md, user-confirmed-web-bff-session-layer -->
+<!-- fact:architecture.design status:verified sources:docs/superpowers/plans/2026-09-14-studio-shell-empty-state.md#studio-shell-layout-empty-state, docs/superpowers/plans/2026-09-14-studio-shell-empty-state.md#task-3-empty-state-information-architecture, docs/technical-plan.md, docs/technical-plan.md#automatic-history-and-double-state-publication, user-confirmed-web-bff-session-layer -->

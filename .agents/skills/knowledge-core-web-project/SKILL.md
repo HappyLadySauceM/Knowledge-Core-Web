@@ -7,7 +7,7 @@ description: "Project-specific engineering guidance for Knowledge-Core-Web. Use 
 
 # Knowledge-Core-Web Project Guide
 
-Manifest revision: `74`. Manifest digest: `2040150407b7fef2`.
+Manifest revision: `77`. Manifest digest: `71297cbc97867896`.
 
 ## Required Workflow
 

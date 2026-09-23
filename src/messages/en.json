@@ -177,6 +177,7 @@
     "collaborationResetFailed": "Unable to reset collaboration state",
     "documentRestored": "Document was restored; reloading the collaboration state…",
     "updateFailed": "Update failed",
+    "publicationBackground": "The update is still processing in the background. You can safely retry if it does not complete.",
     "unpublishFailed": "Unpublish failed",
     "memberUpdateFailed": "Unable to update member",
     "requestFailed": "Request failed",

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { apiRequest } from "@/lib/api/client";
-import { CollaborationSessionSchema, CommitPageSchema, CommitSchema, DocumentPageSchema, DocumentSummarySchema } from "@/lib/api/types";
+import { CollaborationSessionSchema, DocumentPageSchema, DocumentSummarySchema, HistoryPageSchema, HistoryRevisionSchema } from "@/lib/api/types";
 
 export type DocumentFilters = { q?: string; cursor?: string; access?: "owner" | "shared"; publication?: "published" | "draft"; folder_id?: string; limit?: number };
 function query(filters: DocumentFilters = {}) { const p = new URLSearchParams(); Object.entries(filters).forEach(([key, value]) => { if (value !== undefined && value !== "") p.set(key, String(value)); }); return p.size ? `?${p}` : ""; }
@@ -16,10 +16,8 @@ export const documentsApi = {
   session: (id: string) => apiRequest(`/api/v1/studio/documents/${encodeURIComponent(id)}/collaboration-sessions`, CollaborationSessionSchema, { method: "POST" }),
   publish: (id: string, revision: number, stateVector: string, idempotencyKey = crypto.randomUUID(), metadata?: { icon?: string; cover_attachment_id?: string; cover_focal_x?: number; cover_focal_y?: number }) => apiRequest(`/api/v1/studio/documents/${encodeURIComponent(id)}/publication`, DocumentSummarySchema, { method: "PUT", headers: { "If-Match": `"${revision}"`, "Idempotency-Key": idempotencyKey }, body: JSON.stringify({ state_vector: stateVector, ...metadata }) }),
   unpublish: (id: string, revision: number) => apiRequest(`/api/v1/studio/documents/${encodeURIComponent(id)}/publication`, z.undefined(), { method: "DELETE", headers: { "If-Match": `"${revision}"`, "Idempotency-Key": crypto.randomUUID() } }),
-  commits: {
-    list: (id: string, limit = 50) => apiRequest(`/api/v1/studio/documents/${encodeURIComponent(id)}/commits?limit=${limit}`, CommitPageSchema),
-    get: (id: string, commitId: string) => apiRequest(`/api/v1/studio/documents/${encodeURIComponent(id)}/commits/${encodeURIComponent(commitId)}`, CommitSchema),
-    create: (id: string, body: { kind: string; label?: string; description?: string; content_hash?: string; content?: unknown; plain_text?: string }, idempotencyKey = crypto.randomUUID()) => apiRequest(`/api/v1/studio/documents/${encodeURIComponent(id)}/commits`, CommitSchema, { method: "POST", headers: { "Idempotency-Key": idempotencyKey }, body: JSON.stringify(body) }),
-    rename: (id: string, commitId: string, body: { label: string; description?: string }) => apiRequest(`/api/v1/studio/documents/${encodeURIComponent(id)}/commits/${encodeURIComponent(commitId)}`, CommitSchema, { method: "PATCH", body: JSON.stringify(body) }),
+  history: {
+    list: (id: string, limit = 50) => apiRequest(`/api/v1/studio/documents/${encodeURIComponent(id)}/history?limit=${limit}`, HistoryPageSchema),
+    get: (id: string, revisionId: string) => apiRequest(`/api/v1/studio/documents/${encodeURIComponent(id)}/history/${encodeURIComponent(revisionId)}`, HistoryRevisionSchema),
   },
 };

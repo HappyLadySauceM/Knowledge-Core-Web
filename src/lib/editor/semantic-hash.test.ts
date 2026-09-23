@@ -19,6 +19,12 @@ describe("publicationSemanticHash", () => {
     await expect(publicationSemanticHash(left)).resolves.toBe(await publicationSemanticHash(right));
   });
 
+  it("ignores stable block ids used only by the history diff", async () => {
+    const left = { title: "Doc", summary: "", slug: "doc", content: { type: "doc", content: [{ type: "paragraph", attrs: { blockId: "block-a" }, content: [{ type: "text", text: "same" }] }] }, plainText: "same" };
+    const right = { ...left, content: { type: "doc", content: [{ type: "paragraph", attrs: { blockId: "block-b" }, content: [{ type: "text", text: "same" }] }] } };
+    await expect(publicationSemanticHash(left)).resolves.toBe(await publicationSemanticHash(right));
+  });
+
   it("uses the first non-empty line when the summary is blank", async () => {
     const content = { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "first line" }] }] };
     const inferred = { title: "Doc", summary: "", slug: "doc", content, plainText: "first line" };

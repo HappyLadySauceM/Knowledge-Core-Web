@@ -9,7 +9,7 @@ export const SessionDataSchema = z.object({ user: SessionUserSchema.nullable(), 
 export type SessionData = z.infer<typeof SessionDataSchema>;
 export const PageInfoSchema = z.object({ next_cursor: z.string().optional(), has_more: z.boolean() });
 export const PublicationStatusSchema = z.enum(["draft", "publishing", "published", "publish_failed", "unpublishing", "unpublish_failed"]);
-export const DocumentSummarySchema = z.object({ id: z.string(), title: z.string(), summary: z.string(), slug: z.string(), owner: PublicUserSchema, access: z.string(), published: z.boolean(), publication_status: PublicationStatusSchema, publication_error: z.string().optional(), metadata_revision: z.number(), content_revision: z.number(), published_at: z.string().optional(), deleted_at: z.string().optional(), projected_at: z.string().optional(), created_at: z.string(), updated_at: z.string(), language: z.string().optional(), tags: z.array(z.string()).optional(), folder_id: z.string().optional(), publication_hash: z.string().optional(), icon: z.string().optional(), cover_attachment_id: z.string().optional(), cover_focal_x: z.number().optional(), cover_focal_y: z.number().optional() });
+export const DocumentSummarySchema = z.object({ id: z.string(), title: z.string(), summary: z.string(), slug: z.string(), owner: PublicUserSchema, access: z.string(), published: z.boolean(), publication_status: PublicationStatusSchema, publication_error: z.string().optional(), metadata_revision: z.number(), content_revision: z.number(), published_at: z.string().optional(), deleted_at: z.string().optional(), projected_at: z.string().optional(), created_at: z.string(), updated_at: z.string(), language: z.string().optional(), tags: z.array(z.string()).optional(), folder_id: z.string().optional(), publication_hash: z.string().optional(), publication_generation: z.number().optional(), active_publication_hash: z.string().optional(), icon: z.string().optional(), cover_attachment_id: z.string().optional(), cover_focal_x: z.number().optional(), cover_focal_y: z.number().optional() });
 export type DocumentSummary = z.infer<typeof DocumentSummarySchema>;
 export const DocumentDetailSchema = z.object({ document: DocumentSummarySchema, content: z.object({ type: z.string(), content: z.array(z.unknown()).optional() }), plain_text: z.string() });
 export type DocumentDetail = z.infer<typeof DocumentDetailSchema>;
@@ -25,10 +25,14 @@ export const CollaborationSessionSchema = z.object({ websocket_url: z.string(), 
 export type CollaborationSession = z.infer<typeof CollaborationSessionSchema>;
 export const DocumentPageSchema = z.object({ items: z.array(DocumentSummarySchema), page: PageInfoSchema });
 export type DocumentPage = z.infer<typeof DocumentPageSchema>;
-export const CommitSchema = z.object({ id: z.string(), document_id: z.string(), kind: z.string(), label: z.string(), description: z.string().optional(), contributor: z.string(), sequence: z.number(), content_hash: z.string(), content: z.object({ type: z.string(), content: z.array(z.unknown()).optional() }), plain_text: z.string(), created_at: z.string(), updated_at: z.string() });
-export type DocumentCommit = z.infer<typeof CommitSchema>;
-export const CommitPageSchema = z.object({ items: z.array(CommitSchema), page: PageInfoSchema });
-export type CommitPage = z.infer<typeof CommitPageSchema>;
+export const HistoryRevisionSchema = z.object({
+  id: z.string(), document_id: z.string(), kind: z.string(), sequence: z.number(), metadata_revision: z.number(),
+  semantic_hash: z.string(), content: z.object({ type: z.string(), content: z.array(z.unknown()).optional() }),
+  plain_text: z.string(), metadata_json: z.string(), contributors_json: z.string(), block_diff_json: z.string(),
+  is_anchor: z.boolean(), created_at: z.string(),
+});
+export type HistoryRevision = z.infer<typeof HistoryRevisionSchema>;
+export const HistoryPageSchema = z.object({ items: z.array(HistoryRevisionSchema), page: PageInfoSchema });
 export const FolderSchema = z.object({ id: z.string(), name: z.string(), parent_id: z.string().optional(), depth: z.number(), revision: z.number(), created_at: z.string(), updated_at: z.string() });
 export type Folder = z.infer<typeof FolderSchema>;
 export const FolderListSchema = z.object({ items: z.array(FolderSchema) });
