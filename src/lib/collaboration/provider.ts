@@ -104,6 +104,12 @@ export class KnowledgeWebSocketProvider {
       const localId = this.awareness.clientID;
       const local = added.concat(updated, removed).filter((id) => id === localId);
       if (local.length === 0) return;
+      // Never send null local state: unowned null claims are closed with 4400, and
+      // TipTap caret teardown often clears awareness while the socket is still open.
+      // Disconnect cleanup on the actor removes stale presence; skip the null frame.
+      // 禁止出站 null：未登记所有权时发 null 会被 4400 断开；TipTap caret 卸载常在
+      // socket 仍打开时清空 awareness。断开由服务端清理，客户端跳过 null 帧。
+      if (this.awareness.getLocalState() === null) return;
       const encoder = encoding.createEncoder();
       encoding.writeVarUint(encoder, awarenessMessage);
       encoding.writeVarUint8Array(encoder, awarenessProtocol.encodeAwarenessUpdate(this.awareness, local));
@@ -405,6 +411,12 @@ export class KnowledgeWebSocketProvider {
       encoding.writeVarUint(encoder, syncMessage);
       syncProtocol.writeSyncStep1(encoder, this.doc);
       socket.send(encoding.toUint8Array(encoder));
+      // Re-assert local presence before the first awareness frame; caret remounts can
+      // clear state while the session request is in flight.
+      // 首帧 awareness 前重新声明本地在线；caret 重挂可能在等 session 期间清空状态。
+      if (this.awareness.getLocalState() === null) {
+        this.awareness.setLocalStateField("user", { name: "You", color: "#6678ff" });
+      }
       this.onAwareness({ added: [this.awareness.clientID], updated: [], removed: [] });
     });
     socket.addEventListener("message", (event) => this.receive(event.data, socket));

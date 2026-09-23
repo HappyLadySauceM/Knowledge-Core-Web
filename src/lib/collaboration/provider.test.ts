@@ -382,4 +382,30 @@ describe("KnowledgeWebSocketProvider handshake", () => {
     remoteAwareness.destroy();
     provider.destroy();
   });
+
+  it("does not send null local awareness while the socket is open", async () => {
+    vi.stubGlobal("WebSocket", FakeWebSocket);
+    const onTerminal = vi.fn();
+    const provider = new KnowledgeWebSocketProvider(
+      async () => ({
+        websocket_url: "ws://collaboration.test/v1/documents/doc",
+        ticket: "ticket",
+        subprotocol: "y-sync",
+      }),
+      new Y.Doc(),
+      { onTerminal },
+    );
+    await vi.waitFor(() => expect(sockets.length).toBeGreaterThan(0));
+    const socket = sockets[sockets.length - 1]!;
+    socket.open();
+    const before = socket.sent.length;
+    // TipTap CollaborationCaret teardown clears local awareness with a non-provider origin.
+    // TipTap CollaborationCaret 卸载时会以非 provider origin 清空本地 awareness。
+    awarenessProtocol.removeAwarenessStates(provider.awareness, [provider.awareness.clientID], "caret-destroy");
+    const awarenessFrames = socket.sent.slice(before).filter((payload) => awarenessClientIds(payload).length > 0);
+    expect(awarenessFrames).toHaveLength(0);
+    expect(provider.awareness.getLocalState()).toBeNull();
+    expect(onTerminal).not.toHaveBeenCalled();
+    provider.destroy();
+  });
 });
