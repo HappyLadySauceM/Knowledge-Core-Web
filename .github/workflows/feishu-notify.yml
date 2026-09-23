@@ -25,7 +25,7 @@ jobs:
       - name: Notify Feishu
         # Pin to the ci-templates commit that added CI-card notify.py.
         # 钉死到加入 CI 卡片的 ci-templates 提交。
-        uses: HappyLadySauceM/ci-templates/.github/actions/feishu-notify@5afe5e483d9afc6c886797f9ac8c1226bc73ea7b
+        uses: HappyLadySauceM/ci-templates/.github/actions/feishu-notify@e05f029f7a981aad7b681d80d951b09c7e9c87aa
         with:
           webhook: ${{ secrets.FEISHU_WEBHOOK_URL }}
           secret: ${{ secrets.FEISHU_WEBHOOK_SECRET }}

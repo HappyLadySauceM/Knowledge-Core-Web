@@ -838,11 +838,11 @@
     "profile": "generic",
     "slug": "knowledge-core-web"
   },
-  "revision": 77,
+  "revision": 78,
   "scan": {
-    "fingerprint": "4c8eac16c90c487ac427ea0d57c5944b4242a2ea6c6b402441a3deca5aebc5f0",
+    "fingerprint": "fc0fb95cf58b6fe16342f145d1e9b26949db4a61ffcaff25b5da6fb21f03044d",
     "inventoryCount": 174
   },
   "schemaVersion": 3,
-  "updatedAt": "2026-09-23T08:31:14Z"
+  "updatedAt": "2026-09-23T09:31:07Z"
 }
